@@ -1,0 +1,37 @@
+sequenceDiagram
+    participant C as Client
+    participant A as FastAPI (middleware → router)
+    participant D as MySQL
+
+    Note over C,D: Registration (FR-001)
+    C->>A: POST /v1/auth/register {email, password}
+    A->>A: validate input (Pydantic)<br/>password policy: ≥ 12 chars, breached-list screen (D6)
+    A->>D: INSERT user (bcrypt/argon2 hash, role=user)
+    A-->>C: 201 Created (no PII echo)
+
+    Note over C,D: Login (FR-002)
+    C->>A: POST /v1/auth/login {email, password}
+    A->>D: SELECT user + role
+    A->>A: verify hash
+    alt valid credentials
+        A-->>C: 200 {access_token} — JWT, 15-min TTL, no refresh token (D1)
+    else invalid
+        A-->>C: 401 (audit-logged with request_id)
+    end
+
+    Note over C,D: Authenticated write (FR-003/004)
+    C->>A: PUT /v1/articles/{id} + Authorization: Bearer
+    A->>A: JWT middleware — verify signature & expiry
+    alt token missing / expired
+        A-->>C: 401 Unauthorized (re-authenticate)
+    else token valid
+        A->>A: RBAC middleware — owner or admin?
+        alt role/ownership check fails
+            A-->>C: 403 Forbidden
+        else authorized
+            A->>D: UPDATE … (optimistic concurrency, D11)
+            A-->>C: 200 OK
+        end
+    end
+
+    Note over C,A: Public reads (GET article/list) bypass<br/>JWT and RBAC entirely — no auth required

@@ -1,0 +1,23 @@
+sequenceDiagram
+    participant C as Client (anonymous)
+    participant A as FastAPI
+    participant R as Redis
+    participant D as MySQL
+
+    C->>A: GET /v1/articles/{id}
+    Note over A: timeout budgets on every hop<br/>(see resilience/fault-tolerance-design.md)
+    A->>R: GET article:{id}
+    alt cache hit (target ≥ 90%)
+        R-->>A: cached JSON
+    else cache miss
+        Note over A: single-flight lock — only one<br/>loader per key under concurrency
+        A->>D: SELECT … WHERE id = ? AND deleted_at IS NULL
+        D-->>A: row
+        A->>R: SET article:{id} EX ttl+jitter
+    end
+    A-->>C: 200 OK
+    Note over C,A: request_id correlates logs / metrics / traces
+
+    rect rgb(255, 240, 240)
+        Note over A,R: Redis unavailable → skip cache,<br/>read MySQL directly (degraded latency, correct data)
+    end

@@ -1,0 +1,22 @@
+graph LR
+    req[Incoming request] --> rid[Request-ID middleware<br/>assign request_id]
+
+    rid --> logs[Structured JSON logs<br/>100% of requests]
+    rid --> metrics[RED metrics<br/>rate · errors · duration P50/P95/P99]
+    rid --> traces[OTEL spans<br/>HTTP + DB + cache spans]
+
+    logs --> agg[Log aggregation]
+    metrics --> exp["/metrics endpoint"]
+    exp -- scrape --> prom[Prometheus]
+    traces -- "OTLP (best-effort, async)" --> otel[OTEL Collector]
+    otel --> prom
+
+    prom --> graf[Grafana dashboards<br/>latency · error rate · throughput · cache hit ratio]
+    prom --> alert[Alerting<br/>SLO error-budget burn · saturation]
+    alert --> oncall[Operator / SRE<br/>+ runbooks]
+    graf --> oncall
+    agg --> oncall
+
+    style otel stroke-dasharray: 5 5
+    %% Telemetry export is best-effort: collector loss must never
+    %% fail or slow request handling (PRD §10 dependency posture).

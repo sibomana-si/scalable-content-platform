@@ -1,0 +1,22 @@
+graph TD
+    req[Request] --> path{Dependency call<br/>with explicit timeout}
+
+    path -- "Redis down / timeout" --> fallthrough[Fall through to MySQL<br/>degraded latency, correct data]
+    fallthrough --> ok1[200 OK]
+
+    path -- "MySQL slow / error" --> retry{Retry with backoff + jitter<br/>idempotent reads only}
+    retry -- recovered --> ok2[200 OK]
+    retry -- "failures exceed threshold" --> cb[Circuit breaker OPENS<br/>fail fast, no queue pile-up]
+
+    cb --> shed[Load shedding / fallback<br/>503 + Retry-After<br/>no hanging, no cascade]
+    cb -- "cool-off elapsed" --> half[HALF-OPEN<br/>limited probe requests]
+    half -- "probe succeeds" --> closed[Breaker CLOSES<br/>normal service resumes]
+    half -- "probe fails" --> cb
+
+    shed -.-> alert[Alert: error-budget burn<br/>operator + runbook]
+
+    %% Invariants (resilience/fault-tolerance-design.md):
+    %% - every external call has a timeout — nothing waits forever
+    %% - retries are bounded and backed off — no retry storms
+    %% - Redis loss is a latency event, never a correctness event
+    %% - MySQL impairment produces fast, explicit 5xx — not cascading hangs
