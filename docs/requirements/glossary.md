@@ -1,6 +1,6 @@
 # Glossary / Ubiquitous Language
 
-> **Status:** 🟧 In progress · **Owner:** Simon Sibomana · **Last updated:** 2026-06-09
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-06-10
 
 Single source of truth for domain terms. Keep code, API, and docs aligned with these definitions.
 

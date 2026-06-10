@@ -228,7 +228,7 @@ Delivered as incremental product increments, each independently demonstrable:
 
 **Still open**
 
-_None — all charter-level questions are resolved. Remaining TBDs are measurement-driven (exact SLO numbers, pending load testing — see [non-functional-requirements.md](non-functional-requirements.md)) or sign-off (reviewers/approvers in §0)._
+_None — all charter-level questions are resolved. Remaining TBDs are measurement-driven (exact SLO numbers, pending load testing — see [non-functional-requirements.md](non-functional-requirements.md))._
 
 ## 14. References
 

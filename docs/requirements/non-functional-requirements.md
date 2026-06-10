@@ -120,6 +120,6 @@ Operational requirements:
 - **Data-format conventions:** all timestamps are **UTC / ISO-8601**; request/response payloads are **UTF-8 JSON**; errors use the canonical envelope in [error-catalog](../api/error-catalog.md).
 
 ## References
-- [product-requirements.md](product-requirements.md) (decisions D1–D8) · [observability/slo.md](../observability/slo.md) (SLI/SLO/error budget)
+- [product-requirements.md](product-requirements.md) (decisions D1–D12) · [observability/slo.md](../observability/slo.md) (SLI/SLO/error budget)
 - [security/authn-authz.md](../security/authn-authz.md) · [resilience/fault-tolerance-design.md](../resilience/fault-tolerance-design.md) · [performance/load-test-report.md](../performance/load-test-report.md)
 - External standards: [Google SRE — SLOs](https://sre.google/sre-book/service-level-objectives/) · [DORA State of DevOps](https://dora.dev/) · [OWASP API Security Top 10](https://owasp.org/API-Security/) · [NIST SP 800-63B](https://pages.nist.gov/800-63-3/sp800-63b.html)
