@@ -1,6 +1,6 @@
 # Non-Functional Requirements (NFR) / SLO
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-06-09
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-06-10
 
 These are the *measurable* claims the system must back up. Pair with [observability/slo.md](../observability/slo.md).
 
@@ -71,6 +71,7 @@ Production debuggability is a first-class requirement (not load-test-dependent).
 |---|---|
 | Test coverage | **≥ 80%** on core modules (Google scale: 60/75/90 = acceptable/commendable/exemplary). Coverage is a floor, not a goal — prioritize meaningful tests over the number |
 | Test types | **Unit** (logic), **integration** (DB/cache via service containers), **contract** (API schema/OpenAPI), **security/abuse** (auth bypass, injection, IDOR — see [threat-model](../security/threat-model.md)), and **load** (M6). Unit/integration/contract/security run in CI; load runs in M6 |
+| Development practice | **TDD** — a failing test precedes implementation for all application behavior; FR acceptance criteria are the canonical test sources. See [ADR-0006](../architecture/adr/0006-test-driven-development.md) and the [testing strategy](../development/testing-strategy.md) |
 | Lint & format | `ruff check` + `ruff format --check` clean; enforced as a **CI gate** |
 | Type checking | Type hints on public interfaces; static checking encouraged |
 | Code review | Required before merge via `CODEOWNERS`; CI must be green |
