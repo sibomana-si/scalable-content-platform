@@ -1,0 +1,117 @@
+# Testing Strategy & TDD Guide
+
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-09
+
+How this project writes tests — and, more importantly, **when**: tests are written *before* the code
+they verify. This document is the practical companion to two requirements that already exist:
+the [NFR Maintainability](../requirements/non-functional-requirements.md) targets (coverage ≥ 80% on
+core modules; unit/integration/contract/security tests in CI) and the acceptance criteria in the
+[functional requirements](../requirements/functional-requirements.md). The decision to adopt TDD is
+recorded in [ADR-0006](../architecture/adr/0006-test-driven-development.md).
+
+## 1. The TDD policy
+
+**A failing test precedes implementation.** The loop is the classic red → green → refactor:
+
+1. **Red** — write the smallest test that expresses the next required behavior; run it; watch it fail
+   for the *right reason* (assertion failure, not import error).
+2. **Green** — write the minimum implementation that makes it pass.
+3. **Refactor** — clean up with the test as the safety net; the test does not change unless the
+   *requirement* changed.
+
+**Definition of done includes the test that drove the change.** A PR that adds or changes behavior
+must contain the test(s) that motivated it; reviewers should be able to check out the PR, revert the
+implementation, and watch those tests fail.
+
+## 2. Outside-in: the FRs are the test list
+
+This project uses **double-loop ("outside-in") TDD**, anchored on the functional requirements:
+
+- **Outer loop — acceptance tests.** Each `FR-xxx` acceptance criterion becomes a failing API-level
+  test first (httpx `AsyncClient` against the FastAPI app), *before* any endpoint code exists. The
+  FR documents are the canonical source of test cases — no invented behavior, no untested criteria.
+- **Inner loop — unit tests.** While making an outer test pass, drive each service/logic component
+  with fast unit tests (no I/O), red-green-refactoring at the function/class level.
+
+**Naming convention for traceability:** acceptance tests carry the FR id in the module or test name,
+e.g. `tests/acceptance/test_fr001_registration.py::test_rejects_password_under_12_chars`. This makes
+requirements → test traceability greppable, and lets the eventual coverage report be read against the
+FR list directly.
+
+| FR | Acceptance-test module (convention) | Drives |
+|---|---|---|
+| FR-001 Registration | `tests/acceptance/test_fr001_registration.py` | Auth router + service, password policy (D6) |
+| FR-002 Login (JWT) | `tests/acceptance/test_fr002_login.py` | Token issue, 15-min TTL (D1), no user enumeration |
+| FR-003 RBAC | `tests/acceptance/test_fr003_rbac.py` | 401-before-403 ordering, public-read bypass |
+| FR-004 Article CRUD | `tests/acceptance/test_fr004_articles.py` | Ownership, PUT full-replace (D10), optimistic concurrency `409` (D11), soft delete (D3), cache invalidation |
+| FR-005 Paginated reads | `tests/acceptance/test_fr005_lists.py` | Keyset cursor (D9), `author` filter (D7), bounded page size |
+| FR-006 Retention purge | `tests/acceptance/test_fr006_purge.py` | Idempotency, retention-window boundary, untouched live rows |
+
+## 3. Test pyramid, mapped to the architecture
+
+The layers in the [component view (C4 L3)](../architecture/overview.md) each get the test type they
+deserve — the layering exists precisely so each layer is independently testable:
+
+| Layer (L3) | Test type | Speed / isolation | What it asserts |
+|---|---|---|---|
+| Routers + error envelope | **Contract** | Fast — app in-process, dependencies faked or containerized | Status codes, canonical [error envelope](../api/error-catalog.md), response schema vs. OpenAPI |
+| Services (auth, article, admin) | **Unit** | Fastest — pure logic, no I/O | Ownership rules, password policy, token claims, invalidation decisions |
+| Repositories | **Integration** | Real **MySQL** service container | SQL correctness, soft-delete filtering, keyset pagination edges (ties on `created_at`), transactions |
+| Cache client | **Integration** | Real **Redis** service container | Cache-aside hit/miss/populate, TTL+jitter bounds, invalidation on write, fallthrough when Redis is down |
+| JWT/RBAC middleware | **Security / abuse** | Fast — in-process | Negative cases are first-class: missing/expired/tampered token → `401`, wrong role → `403`, IDOR and ownership-bypass attempts rejected ([threat-model](../security/threat-model.md)) |
+| Purge worker | **Integration** | Real MySQL | FR-006 idempotency and retention-window boundaries |
+
+Integration tests run against the **same MySQL 8 / Redis 7 service containers CI already defines**
+(`.github/workflows/ci.yml`); locally they use the docker compose stack, so
+there is one set of tests, not a "CI suite" and a "local suite."
+
+### What is TDD'd — and what is not
+
+- **Strictly test-first:** business logic, API contracts, authorization rules, cache invalidation,
+  pagination — anything an FR acceptance criterion or PRD decision describes.
+- **Verified, not TDD'd:** observability wiring (log fields, metric names, span presence) and infra
+  glue are covered by integration/smoke assertions after wiring, since their "spec" is configuration.
+- **Validation, not TDD:** load tests (M6, [load-test-plan](../performance/load-test-plan.md)) and
+  fault-injection/chaos runs (M7, [chaos-test-report](../resilience/chaos-test-report.md)) measure
+  the running system against NFR targets; they are reports, not red-green loops.
+
+## 4. Tooling & commands
+
+| Concern | Choice |
+|---|---|
+| Runner | `pytest` + `pytest-asyncio` |
+| API tests | `httpx.AsyncClient` against the FastAPI app (ASGI transport — no live server needed) |
+| Integration deps | MySQL 8 / Redis 7 containers (CI services; docker compose locally) |
+| Fixtures | Factory fixtures for users/roles/articles in `tests/conftest.py`; per-test DB isolation (transaction rollback or truncate) |
+| Coverage | `pytest --cov` with `--cov-fail-under=80` ([NFR floor](../requirements/non-functional-requirements.md)) |
+| Lint/format | `ruff check` + `ruff format --check` (already CI gates) |
+
+Commands (canonical — also recorded in `CONTRIBUTING.md` at the repo root):
+
+```bash
+pytest -q                                  # full suite
+pytest path/to/test_file.py::test_name     # a single test
+pytest --cov --cov-fail-under=80           # with the coverage gate
+```
+
+Coverage is a **floor, not a goal** — the NFR wording applies: prioritize meaningful tests over the
+number. A test that exists only to lift coverage and asserts nothing of value should be rejected in
+review.
+
+## 5. CI follow-ups (recorded here so they aren't forgotten)
+
+Two changes to `.github/workflows/ci.yml` are due **when the first real test lands**
+(not before — both would break a test-less repo):
+
+1. **Remove the pytest exit-code-5 tolerance** (the "no tests collected → pass" shim in the `test`
+   job). Once a suite exists, zero collected tests must be a failure, not a pass.
+2. **Add the coverage gate**: run pytest with `--cov --cov-fail-under=80` in CI so the NFR floor is
+   enforced mechanically, not socially.
+
+## 6. References
+
+- [ADR-0006 — Test-driven development](../architecture/adr/0006-test-driven-development.md) (the decision record)
+- [Functional requirements](../requirements/functional-requirements.md) (the canonical test list)
+- [NFR — Maintainability](../requirements/non-functional-requirements.md) (coverage floor, test types, CI gates)
+- [Threat model](../security/threat-model.md) (source of security/abuse cases)
+- [Load test plan](../performance/load-test-plan.md) · [Chaos test report](../resilience/chaos-test-report.md) (validation, outside TDD)
