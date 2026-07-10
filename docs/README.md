@@ -11,11 +11,11 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Glossary](requirements/glossary.md) — 🟩
 
 ## Architecture
-- [System Architecture Overview (C4)](architecture/overview.md) — 🟨
-- [Architecture Decision Records](architecture/adr/) — 🟨
-- [Diagrams (source-controlled)](architecture/diagrams/) — 🟨
-- [Trade-off Analysis](architecture/trade-off-analysis.md) — 🟨
-- [Capacity & Scaling Model](architecture/capacity-scaling-model.md) — 🟨
+- [System Architecture Overview (C4)](architecture/overview.md) — 🟩
+- [Architecture Decision Records](architecture/adr/) — 🟩
+- [Diagrams (source-controlled)](architecture/diagrams/) — 🟩
+- [Trade-off Analysis](architecture/trade-off-analysis.md) — 🟩
+- [Capacity & Scaling Model](architecture/capacity-scaling-model.md) — 🟩
 
 ## API
 - [OpenAPI Spec](api/openapi.md) — 🟥
@@ -30,16 +30,16 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Caching Strategy](data/caching-strategy.md) — 🟥
 
 ## Security
-- [AuthN & AuthZ](security/authn-authz.md) — 🟥
-- [Threat Model](security/threat-model.md) — 🟥
-- [OWASP Top 10 Mitigation Matrix](security/owasp-matrix.md) — 🟥
-- [Secrets Management](security/secrets-management.md) — 🟥
+- [AuthN & AuthZ](security/authn-authz.md) — 🟩
+- [Threat Model](security/threat-model.md) — 🟨
+- [OWASP Top 10 Mitigation Matrix](security/owasp-matrix.md) — 🟨
+- [Secrets Management](security/secrets-management.md) — 🟩
 
 ## Observability
-- [Observability Guide](observability/observability-guide.md) — 🟥
-- [SLI/SLO/Error Budget](observability/slo.md) — 🟥
-- [Dashboards Catalog](observability/dashboards.md) — 🟥
-- [Alerting Runbooks](observability/alerting-runbooks.md) — 🟥
+- [Observability Guide](observability/observability-guide.md) — 🟩
+- [SLI/SLO/Error Budget](observability/slo.md) — 🟩
+- [Dashboards Catalog](observability/dashboards.md) — 🟨
+- [Alerting Runbooks](observability/alerting-runbooks.md) — 🟨
 
 ## Operations
 - [Deployment Guide](operations/deployment.md) — 🟥
@@ -51,11 +51,11 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Load Test Report](performance/load-test-report.md) — 🟥
 
 ## Resilience
-- [Fault Tolerance Design](resilience/fault-tolerance-design.md) — 🟥
-- [Chaos / Failure-Injection Report](resilience/chaos-test-report.md) — 🟥
+- [Fault Tolerance Design](resilience/fault-tolerance-design.md) — 🟩
+- [Chaos / Failure-Injection Report](resilience/chaos-test-report.md) — 🟨
 
 ## Development
-- [Testing Strategy & TDD Guide](development/testing-strategy.md) — 🟨
+- [Testing Strategy & TDD Guide](development/testing-strategy.md) — 🟩
 
 ## Reports
 - [Weekly Deliverables](reports/README.md) — 🟥
