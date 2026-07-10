@@ -1,6 +1,6 @@
 # Diagrams (source-controlled)
 
-> **Status:** 🟧 In progress · **Owner:** Simon Sibomana · **Last updated:** 2026-06-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
 
 Diagrams are kept as **code** (Mermaid) so they are diffable and reviewed in PRs. The `.mmd` files in
 this directory are the canonical sources; this page embeds the same Mermaid for rendering in the docs

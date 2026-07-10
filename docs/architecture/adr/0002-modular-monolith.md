@@ -1,12 +1,12 @@
 # ADR-0002: Modular monolith with service boundaries
 
-> **Status:** Accepted · **Date:** 2026-06-10
+> **Status:** Accepted · **Date:** 2026-06-10 · **Last updated:** 2026-07-10
 
 ## Context
 The project brief's architecture sketch names "Auth Service" and "Content Service," which reads as
 microservices. The actual NFRs the topology must serve are horizontal scalability (stateless
 scale-out), read P95 < 200 ms, and graceful degradation — none of which require multiple deployables.
-This is a small-team MVP on an 8-week schedule; every additional deployable adds CI/CD pipelines,
+This is a small-team MVP; every additional deployable adds CI/CD pipelines,
 service discovery, inter-service auth, network failure modes, and distributed tracing complexity.
 
 ## Decision

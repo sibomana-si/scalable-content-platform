@@ -1,6 +1,6 @@
 # Trade-off Analysis
 
-> **Status:** 🟧 In progress · **Owner:** Simon Sibomana · **Last updated:** 2026-06-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
 
 Explicit "we chose X, accepting cost Y, rejecting Z because…" reasoning. For single, weighty decisions
 the canonical record is an [ADR](adr/0001-record-architecture-decisions.md); product-level decisions
@@ -23,6 +23,7 @@ cross-cutting narrative that shows how the trade-offs **compose**.
 | Write concurrency | Optimistic concurrency (version/`updated_at` precondition → `409`) | Clients must handle `409` retry | Pessimistic row locking | Lost-update protection at near-zero cost at MVP write volume (~5 write/s); no lock contention on the hot path | [PRD D11](../requirements/product-requirements.md) |
 | List filtering | `author` filter only (+ implicit `deleted_at IS NULL`) | Less flexible querying for clients | Rich filtering / date ranges | Every filter is an index commitment on the read-heavy path; expand only with load-test evidence | [PRD D7](../requirements/product-requirements.md) |
 | Orchestration | Kubernetes (committed by brief) | Operational complexity high for a single app | Plain Docker Compose / VM deploy | Buys rolling deploys, probes, and declarative horizontal scaling — the operability half of the NFRs; Compose remains the local dev path | [PRD §9 constraints](../requirements/product-requirements.md) |
+| Development methodology | Outside-in TDD anchored on FR acceptance criteria | Slower first commit per feature; real test-maintenance burden | Test-after; coverage-only mandate | Tests that drove the design beat tests retrofitted to a coverage number; FR→test traceability comes free and the NFR ≥ 80% floor is met as a by-product | [ADR-0006](adr/0006-test-driven-development.md) |
 
 ## Narrative
 

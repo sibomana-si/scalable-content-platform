@@ -1,6 +1,6 @@
 # System Architecture Overview (C4)
 
-> **Status:** 🟧 In progress · **Owner:** Simon Sibomana · **Last updated:** 2026-06-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
 
 Documented using the [C4 model](https://c4model.com/): Context → Container → Component. This is the
 architectural companion to the approved [product requirements](../requirements/product-requirements.md);
@@ -196,6 +196,10 @@ budgets are defined in [fault-tolerance-design.md](../resilience/fault-tolerance
   [resilience/fault-tolerance-design.md](../resilience/fault-tolerance-design.md)
 - **Security** — JWT + RBAC, input validation, OWASP API Top 10 coverage →
   [security/authn-authz.md](../security/authn-authz.md), [security/threat-model.md](../security/threat-model.md)
+- **Testability** — the layering in §3 exists so each layer is independently testable (services
+  without I/O, repositories/cache against real containers); all application behavior is built
+  test-first per [ADR-0006](adr/0006-test-driven-development.md) →
+  [development/testing-strategy.md](../development/testing-strategy.md)
 
 ## 7. Related Documents
 
@@ -204,4 +208,5 @@ budgets are defined in [fault-tolerance-design.md](../resilience/fault-tolerance
 - [Diagrams](diagrams/README.md) — source-controlled runtime diagrams
 - ADRs: [0001](adr/0001-record-architecture-decisions.md) · [0002](adr/0002-modular-monolith.md) ·
   [0003](adr/0003-mysql-source-of-truth.md) · [0004](adr/0004-redis-cache-aside.md) ·
-  [0005](adr/0005-stateless-jwt-auth.md)
+  [0005](adr/0005-stateless-jwt-auth.md) · [0006](adr/0006-test-driven-development.md) ·
+  [0007](adr/0007-single-role-fk.md) · [0008](adr/0008-alembic-migrations.md)

@@ -1,6 +1,6 @@
 # Capacity & Scaling Model
 
-> **Status:** 🟧 In progress · **Owner:** Simon Sibomana · **Last updated:** 2026-06-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
 
 Back-of-the-envelope sizing that justifies the scaling claims. These are **planning numbers, not
 commitments** — each is validated (or corrected) by the M6 load test, and this document is updated
