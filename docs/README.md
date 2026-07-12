@@ -24,10 +24,10 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Versioning & Deprecation Policy](api/versioning-policy.md) — 🟥
 
 ## Data
-- [Data Model / ERD](data/data-model.md) — 🟨
-- [Schema & Migrations Guide](data/migrations.md) — 🟨
-- [Indexing & Query Strategy](data/indexing-strategy.md) — 🟥
-- [Caching Strategy](data/caching-strategy.md) — 🟥
+- [Data Model / ERD](data/data-model.md) — 🟩
+- [Schema & Migrations Guide](data/migrations.md) — 🟩
+- [Indexing & Query Strategy](data/indexing-strategy.md) — 🟨
+- [Caching Strategy](data/caching-strategy.md) — 🟩
 
 ## Security
 - [AuthN & AuthZ](security/authn-authz.md) — 🟩
@@ -42,13 +42,13 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Alerting Runbooks](observability/alerting-runbooks.md) — 🟨
 
 ## Operations
-- [Deployment Guide](operations/deployment.md) — 🟥
-- [Runbook / Operations Manual](operations/runbook.md) — 🟥
-- [Configuration Reference](operations/configuration-reference.md) — 🟥
+- [Deployment Guide](operations/deployment.md) — 🟨
+- [Runbook / Operations Manual](operations/runbook.md) — 🟨
+- [Configuration Reference](operations/configuration-reference.md) — 🟨
 
 ## Performance
-- [Load Test Plan](performance/load-test-plan.md) — 🟥
-- [Load Test Report](performance/load-test-report.md) — 🟥
+- [Load Test Plan](performance/load-test-plan.md) — 🟨
+- [Load Test Report](performance/load-test-report.md) — 🟨
 
 ## Resilience
 - [Fault Tolerance Design](resilience/fault-tolerance-design.md) — 🟩
