@@ -1,0 +1,38 @@
+# Runtime dependencies - Scalable Content Platform Backend
+# Install:  pip install -r requirements.txt
+# Pinned as compatible-release lower bounds; freeze exact versions into
+# requirements.lock after install for reproducible CI/dev environments.
+
+# --- Web / ASGI ---
+fastapi>=0.115
+uvicorn[standard]>=0.30        # ASGI server; standard extra = uvloop + httptools
+
+# --- Data: MySQL (async app driver, sync migrations driver) + Redis ---
+sqlalchemy[asyncio]>=2.0       # 2.x async ORM/core
+aiomysql>=0.2                  # async app driver  -> mysql+aiomysql://
+pymysql>=1.1                   # sync driver for Alembic migrations -> mysql+pymysql:// 
+cryptography>=42.0             # required by aiomysql/pymysql for MySQL 8 caching_sha2_password auth
+alembic>=1.13                  # schema migrations 
+redis>=5.0                     # redis-py; async via redis.asyncio 
+
+# --- Config / validation ---
+pydantic>=2.7                  # v2 request/response validation 
+pydantic-settings>=2.3         # 12-factor env config 
+
+# --- Auth ---
+pyjwt>=2.8                     # JWT sign/verify, HS256/RS256
+argon2-cffi>=23.1              # Argon2id password hashing
+
+# --- Observability (M4) ---
+# opentelemetry-* left unpinned so pip resolves a mutually-compatible sdk/exporter/instrumentation set.
+structlog>=24.1                # structured JSON logs
+prometheus-client>=0.20        # RED metrics, GET /metrics
+opentelemetry-sdk
+opentelemetry-exporter-otlp                 # -> OTEL_EXPORTER_OTLP_ENDPOINT
+opentelemetry-instrumentation-fastapi
+opentelemetry-instrumentation-sqlalchemy
+opentelemetry-instrumentation-redis
+
+# --- Resilience ---
+tenacity>=8.2                  # retries with backoff
+pybreaker>=1.2                 # circuit breaker
