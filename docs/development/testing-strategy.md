@@ -1,6 +1,6 @@
 # Testing Strategy & TDD Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-09
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-13
 
 How this project writes tests — and, more importantly, **when**: tests are written *before* the code
 they verify. This document is the practical companion to two requirements that already exist:
@@ -103,10 +103,13 @@ review.
 Two changes to `.github/workflows/ci.yml` are due **when the first real test lands**
 (not before — both would break a test-less repo):
 
-1. **Remove the pytest exit-code-5 tolerance** (the "no tests collected → pass" shim in the `test`
-   job). Once a suite exists, zero collected tests must be a failure, not a pass.
-2. **Add the coverage gate**: run pytest with `--cov --cov-fail-under=80` in CI so the NFR floor is
-   enforced mechanically, not socially.
+1. ✅ **Done** (walking-skeleton smoke suite) — the pytest exit-code-5 tolerance (the "no tests
+   collected → pass" shim in the `test` job) has been **removed**. Zero collected tests is now a
+   failure, not a pass.
+2. **Add the coverage gate** — still pending. CI currently runs `pytest --cov=app` (report only); the
+   `--cov-fail-under=80` floor lands with **FR-001**, once substantive behavior tests exist. Enforcing
+   80% against the bare skeleton (whose error branches are intentionally unexercised) would be noise,
+   not signal.
 
 ## 6. References
 

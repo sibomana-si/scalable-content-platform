@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-12
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-13
 
 Every environment variable: name, purpose, default, required. Mirror in `.env.example`.
 
@@ -14,10 +14,10 @@ Every environment variable: name, purpose, default, required. Mirror in `.env.ex
 | `MYSQL_DB` | Database name | — | Yes |
 | `MYSQL_USER` | DB user | — | Yes |
 | `MYSQL_PASSWORD` | DB password (secret) | — | Yes |
-| `DB_POOL_SIZE` | Connection pool size | _TBD_ | No |
+| `DB_POOL_SIZE` | Connection pool size | `10` | No |
 | `REDIS_URL` | Redis connection URL | — | Yes |
 | `JWT_SECRET` | JWT signing key (secret) | — | Yes |
-| `JWT_EXPIRE_SECONDS` | Access token TTL | _e.g. 900_ | No |
+| `JWT_EXPIRE_SECONDS` | Access token TTL | `900` | No |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | Trace exporter | — | No |
 
 _Secrets (marked) are sourced per [secrets-management.md](../security/secrets-management.md) — never committed._
