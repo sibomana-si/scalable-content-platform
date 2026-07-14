@@ -1,0 +1,51 @@
+"""Health endpoints for Kubernetes probes.
+
+``/health/live`` - pure liveness; no dependencies. Also the harness smoke target.
+``/health/ready`` - readiness; reflects MySQL + Redis health, 503 when a dependency is down.
+"""
+
+from typing import Annotated
+
+from fastapi import APIRouter, Depends
+from fastapi.responses import JSONResponse
+from redis.asyncio import Redis
+from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.cache.client import get_redis
+from app.db.session import get_session
+
+router = APIRouter(prefix="/health", tags=["health"])
+
+
+@router.get("/live")
+async def live() -> dict[str, str]:
+    return {"status": "alive"}
+
+
+@router.get("/ready")
+async def ready(
+    session: Annotated[AsyncSession, Depends(get_session)],
+    redis: Annotated[Redis, Depends(get_redis)],
+) -> JSONResponse:
+    checks: dict[str, str] = {}
+    ok = True
+
+    try:
+        await session.execute(text("SELECT 1"))
+        checks["mysql"] = "ok"
+    except Exception as exc:  # noqa: BLE001 - readiness must report, not raise
+        checks["mysql"] = f"error: {exc.__class__.__name__}"
+        ok = False
+
+    try:
+        await redis.ping()
+        checks["redis"] = "ok"
+    except Exception as exc:  # noqa: BLE001 - readiness must report, not raise
+        checks["redis"] = f"error: {exc.__class__.__name__}"
+        ok = False
+
+    return JSONResponse(
+        status_code=200 if ok else 503,
+        content={"status": "ready" if ok else "degraded", "checks": checks},
+    )
