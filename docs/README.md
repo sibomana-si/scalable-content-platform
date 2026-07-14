@@ -12,8 +12,8 @@ Documentation for the **Scalable Content Platform Backend**.
 
 ## Architecture
 - [System Architecture Overview (C4)](architecture/overview.md) — 🟩
-- [Architecture Decision Records](architecture/adr/) — 🟩
-- [Diagrams (source-controlled)](architecture/diagrams/) — 🟩
+- [Architecture Decision Records](architecture/adr/0001-record-architecture-decisions.md) — 🟩
+- [Diagrams (source-controlled)](architecture/diagrams/README.md) — 🟩
 - [Trade-off Analysis](architecture/trade-off-analysis.md) — 🟩
 - [Capacity & Scaling Model](architecture/capacity-scaling-model.md) — 🟩
 
