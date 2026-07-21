@@ -1,7 +1,7 @@
 """Health endpoints for Kubernetes probes.
 
-``/health/live`` - pure liveness; no dependencies. Also the harness smoke target.
-``/health/ready`` - readiness; reflects MySQL + Redis health, 503 when a dependency is down.
+``/health/live``: pure liveness; no dependencies. Also the harness smoke target.
+``/health/ready``: readiness; reflects MySQL + Redis health, 503 when a dependency is down.
 """
 
 from typing import Annotated
@@ -34,14 +34,14 @@ async def ready(
     try:
         await session.execute(text("SELECT 1"))
         checks["mysql"] = "ok"
-    except Exception as exc:  # noqa: BLE001 - readiness must report, not raise
+    except Exception as exc:  # noqa: BLE001; readiness must report, not raise
         checks["mysql"] = f"error: {exc.__class__.__name__}"
         ok = False
 
     try:
         await redis.ping()
         checks["redis"] = "ok"
-    except Exception as exc:  # noqa: BLE001 - readiness must report, not raise
+    except Exception as exc:  # noqa: BLE001; readiness must report, not raise
         checks["redis"] = f"error: {exc.__class__.__name__}"
         ok = False
 

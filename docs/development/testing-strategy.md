@@ -1,6 +1,6 @@
 # Testing Strategy & TDD Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-13
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-18
 
 How this project writes tests — and, more importantly, **when**: tests are written *before* the code
 they verify. This document is the practical companion to two requirements that already exist:
@@ -44,7 +44,7 @@ FR list directly.
 | FR-002 Login (JWT) | `tests/acceptance/test_fr002_login.py` | Token issue, 15-min TTL (D1), no user enumeration |
 | FR-003 RBAC | `tests/acceptance/test_fr003_rbac.py` | 401-before-403 ordering, public-read bypass |
 | FR-004 Article CRUD | `tests/acceptance/test_fr004_articles.py` | Ownership, PUT full-replace (D10), optimistic concurrency `409` (D11), soft delete (D3), cache invalidation |
-| FR-005 Paginated reads | `tests/acceptance/test_fr005_lists.py` | Keyset cursor (D9), `author` filter (D7), bounded page size |
+| FR-005 Paginated reads | `tests/acceptance/test_fr005_pagination.py` | Keyset cursor (D9), `author` filter (D7), bounded page size |
 | FR-006 Retention purge | `tests/acceptance/test_fr006_purge.py` | Idempotency, retention-window boundary, untouched live rows |
 
 ## 3. Test pyramid, mapped to the architecture
@@ -106,10 +106,11 @@ Two changes to `.github/workflows/ci.yml` are due **when the first real test lan
 1. ✅ **Done** (walking-skeleton smoke suite) — the pytest exit-code-5 tolerance (the "no tests
    collected → pass" shim in the `test` job) has been **removed**. Zero collected tests is now a
    failure, not a pass.
-2. **Add the coverage gate** — still pending. CI currently runs `pytest --cov=app` (report only); the
-   `--cov-fail-under=80` floor lands with **FR-001**, once substantive behavior tests exist. Enforcing
-   80% against the bare skeleton (whose error branches are intentionally unexercised) would be noise,
-   not signal.
+2. ✅ **Done** (FR-004/FR-005 slice) — the 80% floor is enforced via
+   `[tool.coverage.report] fail_under = 80` in `pyproject.toml`, so any `pytest --cov=app` run
+   (CI's included) gates without workflow changes. It landed with the Week-2 slice rather than
+   FR-001 as originally sketched — the article CRUD/pagination suite was the first substantive
+   behavior coverage.
 
 ## 6. References
 

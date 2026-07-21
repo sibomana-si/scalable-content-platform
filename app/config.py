@@ -34,6 +34,7 @@ class Settings(BaseSettings):
 
     def _database_url(self, driver: str) -> str:
         # Credentials are URL-encoded so passwords with reserved characters are safe.
+
         if self.mysql_password:
             auth = f"{quote_plus(self.mysql_user)}:{quote_plus(self.mysql_password)}"
         else:
@@ -42,16 +43,19 @@ class Settings(BaseSettings):
 
     @property
     def async_database_url(self) -> str:
-        """SQLAlchemy async URL for the app (aiomysql) - ``mysql+aiomysql://...``"""
+        """SQLAlchemy async URL for the app (aiomysql): ``mysql+aiomysql://...``"""
+
         return self._database_url("aiomysql")
 
     @property
     def sync_database_url(self) -> str:
-        """SQLAlchemy sync URL for Alembic migrations - ``mysql+pymysql://...``"""
+        """SQLAlchemy sync URL for Alembic migrations: ``mysql+pymysql://...``"""
+
         return self._database_url("pymysql")
 
 
 @lru_cache
 def get_settings() -> Settings:
-    """Cached settings accessor - one resolved ``Settings`` per process."""
+    """Cached settings accessor: one resolved ``Settings`` per process."""
+
     return Settings()
