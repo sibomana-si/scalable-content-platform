@@ -1,0 +1,10 @@
+# Code owners are requested for review automatically on matching paths.
+
+# Default owner for everything
+*           @si-sibomana
+
+# Domain-specific (adjust as the codebase grows)
+/docs/      @si-sibomana
+/.github/   @si-sibomana
+/app/       @si-sibomana
+/tests/    @si-sibomana
