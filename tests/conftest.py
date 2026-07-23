@@ -94,12 +94,18 @@ async def clean_db(migrated_db: None) -> AsyncGenerator[None, None]:
     teardown for the same reason in reverse.
     """
 
+    async def _wipe() -> None:
+        async with get_sessionmaker()() as session:
+            await session.execute(text("DELETE FROM articles"))
+            await session.execute(text("DELETE FROM users"))
+            await session.commit()
+
     await get_engine().dispose()
-    async with get_sessionmaker()() as session:
-        await session.execute(text("DELETE FROM articles"))
-        await session.execute(text("DELETE FROM users"))
-        await session.commit()
+    await _wipe()
     yield
+    # Wipe on teardown too: leftover users rows would block the migration round-trip
+    # test's role-seed downgrade (fk_users_role_id is ON DELETE RESTRICT).
+    await _wipe()
     await get_engine().dispose()
 
 
