@@ -26,12 +26,12 @@ _DOMAIN_STATUS: dict[type[DomainError], tuple[int, str]] = {
     ArticleNotFoundError: (404, "ARTICLE_NOT_FOUND"),
     ConflictError: (409, "CONFLICT"),
     PreconditionRequiredError: (422, "VALIDATION_ERROR"),
-    InvalidCursorError: (422, "VALIDATION_ERROR")
+    InvalidCursorError: (422, "VALIDATION_ERROR"),
 }
 
 
 def error_response(
-        request: Request, status: int, code: str, message: str, details: dict | list | None = None
+    request: Request, status: int, code: str, message: str, details: dict | list | None = None
 ) -> JSONResponse:
     request_id = getattr(request.state, "request_id", None) or uuid4().hex
     return JSONResponse(
@@ -43,7 +43,7 @@ def error_response(
                 "request_id": request_id,
                 "details": details or {},
             }
-        }
+        },
     )
 
 
@@ -61,7 +61,7 @@ def register_exception_handlers(app: FastAPI) -> None:
             422,
             "VALIDATION_ERROR",
             "Request failed validation.",
-            jsonable_encoder(exc.errors())
+            jsonable_encoder(exc.errors()),
         )
 
     app.add_exception_handler(RequestValidationError, validation_error)

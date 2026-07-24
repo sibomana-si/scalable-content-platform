@@ -26,7 +26,7 @@ async def test_create_and_get_roundtrip(repo, db_session, user_factory):
     fetched = await repo.get(created.id)
     assert fetched is not None
     assert (fetched.author_id, fetched.title, fetched.body) == (user.id, "t", "b")
-    assert isinstance(fetched.created_at, datetime)     # server-generated DATETIME(6)
+    assert isinstance(fetched.created_at, datetime)  # server-generated DATETIME(6)
     assert fetched.updated_at is not None
 
 
@@ -49,7 +49,7 @@ async def test_save_persists_changes_and_advances_updated_at(repo, db_session, a
 
     fetched = await repo.get(article.id)
     assert (fetched.title, fetched.body) == ("new title", "new body")
-    assert fetched.updated_at > original_updated_at     # MySQL ON UPDATE CURRENT_TIMESTAMP(6)
+    assert fetched.updated_at > original_updated_at  # MySQL ON UPDATE CURRENT_TIMESTAMP(6)
 
 
 async def test_soft_delete_marks_row_but_keeps_it(repo, db_session, article_factory):
@@ -58,7 +58,7 @@ async def test_soft_delete_marks_row_but_keeps_it(repo, db_session, article_fact
     await repo.soft_delete(article)
     await db_session.commit()
 
-    assert await repo.get(article.id) is None   # invisible to reads
+    assert await repo.get(article.id) is None  # invisible to reads
     row = (
         await db_session.execute(
             text("SELECT deleted_at FROM articles WHERE id = :id"), {"id": article.id}

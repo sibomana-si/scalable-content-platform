@@ -1,0 +1,101 @@
+site_name: Scalable Content Platform Backend
+site_description: Documentation for a production-oriented, read-heavy FastAPI content platform.
+docs_dir: docs
+
+theme:
+  name: material
+  features:
+    - navigation.sections
+    - navigation.top
+    - navigation.indexes
+    - content.code.copy
+    - search.suggest
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      toggle:
+        icon: material/weather-night
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to light mode
+
+markdown_extensions:
+  - admonition
+  - tables
+  - toc:
+      permalink: true
+  - pymdownx.superfences:
+      custom_fences:
+        - name: mermaid
+          class: mermaid
+          format: !!python/name:pymdownx.superfences.fence_code_format
+
+plugins:
+  - search
+
+validation:
+  omitted_files: warn
+  absolute_links: warn
+  unrecognized_links: warn
+  anchors: warn
+
+nav:
+  - Home: README.md
+  - Requirements:
+      - Product / Charter: requirements/product-requirements.md
+      - Functional: requirements/functional-requirements.md
+      - Non-Functional / SLO: requirements/non-functional-requirements.md
+      - Glossary: requirements/glossary.md
+  - Architecture:
+      - Overview (C4): architecture/overview.md
+      - Trade-off Analysis: architecture/trade-off-analysis.md
+      - Capacity & Scaling: architecture/capacity-scaling-model.md
+      - Diagrams: architecture/diagrams/README.md
+      - ADRs:
+          - "0001 Record decisions": architecture/adr/0001-record-architecture-decisions.md
+          - "0002 Modular monolith": architecture/adr/0002-modular-monolith.md
+          - "0003 MySQL source of truth": architecture/adr/0003-mysql-source-of-truth.md
+          - "0004 Redis cache-aside": architecture/adr/0004-redis-cache-aside.md
+          - "0005 Stateless JWT auth": architecture/adr/0005-stateless-jwt-auth.md
+          - "0006 Test-driven development": architecture/adr/0006-test-driven-development.md
+          - "0007 Single role FK": architecture/adr/0007-single-role-fk.md
+          - "0008 Alembic migrations": architecture/adr/0008-alembic-migrations.md
+          - Template: architecture/adr/template.md
+  - API:
+      - OpenAPI: api/openapi.md
+      - Reference: api/api-reference.md
+      - Error Catalog: api/error-catalog.md
+      - Versioning Policy: api/versioning-policy.md
+  - Data:
+      - Data Model / ERD: data/data-model.md
+      - Migrations: data/migrations.md
+      - Indexing Strategy: data/indexing-strategy.md
+      - Caching Strategy: data/caching-strategy.md
+  - Security:
+      - AuthN & AuthZ: security/authn-authz.md
+      - Threat Model: security/threat-model.md
+      - OWASP Matrix: security/owasp-matrix.md
+      - Secrets Management: security/secrets-management.md
+  - Observability:
+      - Guide: observability/observability-guide.md
+      - SLO: observability/slo.md
+      - Dashboards: observability/dashboards.md
+      - Alerting Runbooks: observability/alerting-runbooks.md
+  - Operations:
+      - Deployment: operations/deployment.md
+      - Runbook: operations/runbook.md
+      - Configuration Reference: operations/configuration-reference.md
+  - Performance:
+      - Load Test Plan: performance/load-test-plan.md
+      - Load Test Report: performance/load-test-report.md
+  - Resilience:
+      - Fault Tolerance Design: resilience/fault-tolerance-design.md
+      - Chaos Test Report: resilience/chaos-test-report.md
+  - Development:
+      - Testing Strategy & TDD: development/testing-strategy.md
+  - Reports:
+      - Weekly Deliverables: reports/README.md
+  - Changelog: CHANGELOG.md

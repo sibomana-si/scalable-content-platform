@@ -115,7 +115,7 @@ async def test_owner_can_update_with_current_if_match(client, user_factory, auth
     resp = await client.put(
         f"{BASE}/{created['id']}",
         json={"title": "New title", "body": "New body."},
-        headers={**auth_headers(user), "If-Match": created["updated_at"]}
+        headers={**auth_headers(user), "If-Match": created["updated_at"]},
     )
 
     assert resp.status_code == 200
@@ -133,7 +133,7 @@ async def test_update_by_non_owner_is_403(client, user_factory, auth_headers):
     resp = await client.put(
         f"{BASE}/{created['id']}",
         json={"title": "hijack", "body": "x"},
-        headers={**auth_headers(other), "If-Match": created["updated_at"]}
+        headers={**auth_headers(other), "If-Match": created["updated_at"]},
     )
     assert_error(resp, 403, "FORBIDDEN")
 
@@ -146,7 +146,7 @@ async def test_admin_can_update_any_article(client, user_factory, auth_headers):
     resp = await client.put(
         f"{BASE}/{created['id']}",
         json={"title": "moderated", "body": "cleaned"},
-        headers={**auth_headers(admin), "If-Match": created["updated_at"]}
+        headers={**auth_headers(admin), "If-Match": created["updated_at"]},
     )
 
     assert resp.status_code == 200
@@ -158,9 +158,7 @@ async def test_update_without_identity_is_401(client, user_factory, auth_headers
     created = await _create_article(client, auth_headers(user))
 
     resp = await client.put(
-        f"{BASE}/{created['id']}",
-        json=PAYLOAD,
-        headers={"If-Match": created["updated_at"]}
+        f"{BASE}/{created['id']}", json=PAYLOAD, headers={"If-Match": created["updated_at"]}
     )
     assert_error(resp, 401, "UNAUTHENTICATED")
 
@@ -179,14 +177,14 @@ async def test_update_with_stale_if_match_is_409(client, user_factory, auth_head
     first = await client.put(
         f"{BASE}/{created['id']}",
         json={"title": "first edit", "body": "b1"},
-        headers={**auth_headers(user), "If-Match": created["updated_at"]}
+        headers={**auth_headers(user), "If-Match": created["updated_at"]},
     )
     assert first.status_code == 200
 
     resp = await client.put(
         f"{BASE}/{created['id']}",
-        json= {"title": "second edit from stale copy", "body": "b2"},
-        headers={**auth_headers(user), "If-Match": created["updated_at"]}   # stale token
+        json={"title": "second edit from stale copy", "body": "b2"},
+        headers={**auth_headers(user), "If-Match": created["updated_at"]},  # stale token
     )
     assert_error(resp, 409, "CONFLICT")
 
@@ -207,8 +205,8 @@ async def test_update_cannot_change_authorship(client, user_factory, auth_header
 
     resp = await client.put(
         f"{BASE}/{created['id']}",
-        json={"title": "t", "body": "b", "author_id": other.id},    # ignored field
-        headers={**auth_headers(user), "If-Match": created["updated_at"]}
+        json={"title": "t", "body": "b", "author_id": other.id},  # ignored field
+        headers={**auth_headers(user), "If-Match": created["updated_at"]},
     )
 
     assert resp.status_code == 200
@@ -223,8 +221,7 @@ async def test_owner_can_soft_delete(client, user_factory, auth_headers):
     created = await _create_article(client, auth_headers(user))
 
     resp = await client.delete(
-        f"{BASE}/{created['id']}",
-        headers={**auth_headers(user), "If-Match": created["updated_at"]}
+        f"{BASE}/{created['id']}", headers={**auth_headers(user), "If-Match": created["updated_at"]}
     )
 
     assert resp.status_code == 204
@@ -238,7 +235,7 @@ async def test_admin_can_delete_any_article(client, user_factory, auth_headers):
 
     resp = await client.delete(
         f"{BASE}/{created['id']}",
-        headers={**auth_headers(admin), "If-Match": created["updated_at"]}
+        headers={**auth_headers(admin), "If-Match": created["updated_at"]},
     )
     assert resp.status_code == 204
 
@@ -249,7 +246,7 @@ async def test_delete_by_non_owner_is_403(client, user_factory, auth_headers):
 
     resp = await client.delete(
         f"{BASE}/{created['id']}",
-        headers={**auth_headers(other), "If-Match": created["updated_at"]}
+        headers={**auth_headers(other), "If-Match": created["updated_at"]},
     )
     assert_error(resp, 403, "FORBIDDEN")
 
@@ -268,13 +265,13 @@ async def test_delete_with_stale_if_match_is_409(client, user_factory, auth_head
     updated = await client.put(
         f"{BASE}/{created['id']}",
         json={"title": "edited", "body": "b"},
-        headers={**auth_headers(user),  "If-Match": created["updated_at"]}
+        headers={**auth_headers(user), "If-Match": created["updated_at"]},
     )
     assert updated.status_code == 200
 
     resp = await client.delete(
         f"{BASE}/{created['id']}",
-        headers={**auth_headers(user), "If-Match": created["updated_at"]}   # stale token
+        headers={**auth_headers(user), "If-Match": created["updated_at"]},  # stale token
     )
     assert_error(resp, 409, "CONFLICT")
 
@@ -283,8 +280,7 @@ async def test_double_delete_is_404(client, user_factory, auth_headers):
     user = await user_factory()
     created = await _create_article(client, auth_headers(user))
     first = await client.delete(
-        f"{BASE}/{created['id']}",
-        headers={**auth_headers(user), "If-Match": created["updated_at"]}
+        f"{BASE}/{created['id']}", headers={**auth_headers(user), "If-Match": created["updated_at"]}
     )
     assert first.status_code == 204
 
@@ -296,7 +292,7 @@ async def test_double_delete_is_404(client, user_factory, auth_headers):
 
 
 async def test_if_match_tolerates_surrounding_quotes(
-        client: AsyncClient, user_factory, auth_headers
+    client: AsyncClient, user_factory, auth_headers
 ):
     user = await user_factory()
     created = await _create_article(client, auth_headers(user))
@@ -304,7 +300,6 @@ async def test_if_match_tolerates_surrounding_quotes(
     resp = await client.put(
         f"{BASE}/{created['id']}",
         json={"title": "quoted", "body": "b"},
-        headers={**auth_headers(user), "If-Match": f'"{created["updated_at"]}"'}
+        headers={**auth_headers(user), "If-Match": f'"{created["updated_at"]}"'},
     )
     assert resp.status_code == 200
-

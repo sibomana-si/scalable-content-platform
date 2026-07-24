@@ -12,7 +12,7 @@ NAMING_CONVENTION = {
     "fk": "fk_%(table_name)s_%(column_0_name)s",
     "uq": "uq_%(table_name)s_%(column_0_N_name)s",
     "ix": "idx_%(table_name)s_%(column_0_N_name)s",
-    "ck": "ck_%(table_name)s_%(constraint_name)s"
+    "ck": "ck_%(table_name)s_%(constraint_name)s",
 }
 
 

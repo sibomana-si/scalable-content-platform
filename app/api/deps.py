@@ -16,7 +16,7 @@ SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
 async def get_current_user(
-        session: SessionDep, x_user_id: Annotated[str | None, Header()] = None
+    session: SessionDep, x_user_id: Annotated[str | None, Header()] = None
 ) -> User:
     if x_user_id is None or not x_user_id.isdigit():
         raise UnauthenticatedError("Missing or invalid identity.")

@@ -33,7 +33,7 @@ def _parse_if_match(if_match: str | None) -> datetime:
 
 @router.post("", status_code=201, response_model=ArticleOut)
 async def create_article(
-        payload: ArticleIn, actor: CurrentUser, service: ArticleServiceDep, session: SessionDep
+    payload: ArticleIn, actor: CurrentUser, service: ArticleServiceDep, session: SessionDep
 ) -> ArticleOut:
     article = await service.create(actor, title=payload.title, body=payload.body)
     await session.commit()
@@ -47,12 +47,12 @@ async def get_article(article_id: int, service: ArticleServiceDep) -> ArticleOut
 
 @router.put("/{article_id}", response_model=ArticleOut)
 async def update_article(
-        article_id: int,
-        payload: ArticleIn,
-        actor: CurrentUser,
-        service: ArticleServiceDep,
-        session: SessionDep,
-        if_match: IfMatchHeader = None
+    article_id: int,
+    payload: ArticleIn,
+    actor: CurrentUser,
+    service: ArticleServiceDep,
+    session: SessionDep,
+    if_match: IfMatchHeader = None,
 ) -> ArticleOut:
     expected = _parse_if_match(if_match)
     article = await service.update(
@@ -64,11 +64,11 @@ async def update_article(
 
 @router.delete("/{article_id}", status_code=204)
 async def delete_article(
-        article_id: int,
-        actor: CurrentUser,
-        service: ArticleServiceDep,
-        session: SessionDep,
-        if_match: IfMatchHeader = None
+    article_id: int,
+    actor: CurrentUser,
+    service: ArticleServiceDep,
+    session: SessionDep,
+    if_match: IfMatchHeader = None,
 ) -> Response:
     expected = _parse_if_match(if_match)
     await service.delete(actor, article_id, expected_updated_at=expected)

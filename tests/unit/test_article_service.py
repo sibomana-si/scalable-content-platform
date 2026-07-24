@@ -36,7 +36,7 @@ class FakeArticleRepository:
             title=title,
             body=body,
             created_at=now,
-            updated_at=now
+            updated_at=now,
         )
         self.rows[article.id] = article
         return article
@@ -60,7 +60,7 @@ def make_user(user_id: int, role: str = "user") -> User:
         id=user_id,
         email=f"u{user_id}@example.com",
         password_hash="x",
-        role=Role(id=1 if role == "user" else 2, name=role)
+        role=Role(id=1 if role == "user" else 2, name=role),
     )
 
 
@@ -132,7 +132,7 @@ async def test_admin_can_update_any(service, owner):
         created.id,
         title="mod",
         body="mod",
-        expected_updated_at=created.updated_at
+        expected_updated_at=created.updated_at,
     )
     assert updated.title == "mod"
     assert updated.author_id == owner.id
@@ -188,4 +188,3 @@ async def test_delete_already_deleted_raises_not_found(service, owner):
     await service.delete(owner, created.id, expected_updated_at=created.updated_at)
     with pytest.raises(ArticleNotFoundError):
         await service.delete(owner, created.id, expected_updated_at=created.updated_at)
-

@@ -29,10 +29,9 @@ class ArticleRepository:
 
     async def save(self, article: Article) -> Article:
         await self._session.flush()
-        await self._session.refresh(article)    # pick up ON UPDATE CURRENT_TIMESTAMP(6)
+        await self._session.refresh(article)  # pick up ON UPDATE CURRENT_TIMESTAMP(6)
         return article
 
     async def soft_delete(self, article: Article) -> None:
         article.deleted_at = _utcnow()
         await self._session.flush()
-        

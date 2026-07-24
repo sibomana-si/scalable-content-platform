@@ -124,15 +124,15 @@ async def user_factory(db_session: AsyncSession) -> Callable[..., Awaitable[User
     counter = itertools.count(1)
 
     async def _create(
-            email: str | None = None,
-            role: str = "user",
-            password_hash: str = "$argon2id$test-not-a-real-hash",
+        email: str | None = None,
+        role: str = "user",
+        password_hash: str = "$argon2id$test-not-a-real-hash",
     ) -> User:
         role_row = (await db_session.execute(select(Role).where(Role.name == role))).scalar_one()
         user = User(
             email=email or f"user{next(counter)}@example.com",
             password_hash=password_hash,
-            role_id=role_row.id
+            role_id=role_row.id,
         )
         db_session.add(user)
         await db_session.commit()
@@ -144,7 +144,7 @@ async def user_factory(db_session: AsyncSession) -> Callable[..., Awaitable[User
 
 @pytest_asyncio.fixture
 async def article_factory(
-        db_session: AsyncSession, user_factory: Callable[..., Awaitable[User]]
+    db_session: AsyncSession, user_factory: Callable[..., Awaitable[User]]
 ) -> Callable[..., Awaitable[Article]]:
     """Create committed articles; explicit ``created_at`` (for keyset tie/ordering tests)
     and ``deleted_at`` (soft-deleted state) are settable."""
@@ -152,11 +152,11 @@ async def article_factory(
     counter = itertools.count(1)
 
     async def _create(
-            author: User | None = None,
-            title: str | None = None,
-            body: str = "Body of the article",
-            created_at: datetime | None = None,
-            deleted_at: datetime | None = None
+        author: User | None = None,
+        title: str | None = None,
+        body: str = "Body of the article",
+        created_at: datetime | None = None,
+        deleted_at: datetime | None = None,
     ) -> Article:
         if author is None:
             author = await user_factory()
@@ -164,7 +164,7 @@ async def article_factory(
             author_id=author.id,
             title=title or f"Article {next(counter)}",
             body=body,
-            deleted_at=deleted_at
+            deleted_at=deleted_at,
         )
         if created_at is not None:
             article.created_at = created_at
@@ -184,4 +184,3 @@ def auth_headers() -> Callable[[User], dict[str, str]]:
         return {"X-User-Id": str(user.id)}
 
     return _headers
-

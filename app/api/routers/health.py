@@ -34,14 +34,16 @@ async def ready(
     try:
         await session.execute(text("SELECT 1"))
         checks["mysql"] = "ok"
-    except Exception as exc:  # noqa: BLE001; readiness must report, not raise
+    # readiness must report, not raise, so a broad catch is intentional here
+    except Exception as exc:  # noqa: BLE001
         checks["mysql"] = f"error: {exc.__class__.__name__}"
         ok = False
 
     try:
         await redis.ping()
         checks["redis"] = "ok"
-    except Exception as exc:  # noqa: BLE001; readiness must report, not raise
+    # readiness must report, not raise, so a broad catch is intentional here
+    except Exception as exc:  # noqa: BLE001
         checks["redis"] = f"error: {exc.__class__.__name__}"
         ok = False
 

@@ -21,8 +21,9 @@ depends_on: str | Sequence[str] | None = None
 def upgrade() -> None:
     op.execute(
         "INSERT INTO roles (name) VALUES ('user'), ('admin') "
-        "ON DUPLICATE KEY UPDATE name = name" # idempotent via uq_roles_name
+        "ON DUPLICATE KEY UPDATE name = name"  # idempotent via uq_roles_name
     )
+
 
 def downgrade() -> None:
     op.execute("DELETE FROM roles WHERE name IN ('user', 'admin')")

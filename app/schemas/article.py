@@ -29,4 +29,5 @@ class ArticleOut(BaseModel):
     title: str
     body: str
     created_at: datetime
-    updated_at: datetime    # doubles as the optimistic-concurrency token clients echo back via If-Match.
+    # doubles as the optimistic-concurrency token clients echo back via If-Match.
+    updated_at: datetime

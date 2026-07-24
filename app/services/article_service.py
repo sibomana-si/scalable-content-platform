@@ -23,13 +23,7 @@ class ArticleService:
         return article
 
     async def update(
-            self,
-            actor: User,
-            article_id: int,
-            *,
-            title: str,
-            body: str,
-            expected_updated_at: datetime
+        self, actor: User, article_id: int, *, title: str, body: str, expected_updated_at: datetime
     ) -> Article:
         article = await self.get(article_id)
         self._authorize(actor, article)

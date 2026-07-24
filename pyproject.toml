@@ -1,0 +1,24 @@
+# Tooling configuration only — no [build-system]; the app runs from the repo root
+# (`uvicorn app.main:app`, `pytest`, `ruff .`) with no packaging/editable install.
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+pythonpath = ["."]  # flat layout: put repo root on sys.path so `import app` resolves
+testpaths = ["tests"]
+markers = [
+    "integration: requires live MySQL/Redis containers (docker compose up locally; CI service containers)",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+
+[tool.coverage.run]
+source = ["app"]
+omit = ["tests/*"]
+
+[tool.coverage.report]
+fail_under = 80

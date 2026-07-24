@@ -12,7 +12,7 @@ class Role(Base):
     __table_args__ = {
         "mysql_engine": "InnoDB",
         "mysql_charset": "utf8mb4",
-        "mysql_collate": "utf8mb4_0900_ai_ci"
+        "mysql_collate": "utf8mb4_0900_ai_ci",
     }
 
     id: Mapped[int] = mapped_column(TINYINT(unsigned=True), primary_key=True, autoincrement=True)
