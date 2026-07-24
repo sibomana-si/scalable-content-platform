@@ -31,3 +31,9 @@ class ArticleOut(BaseModel):
     created_at: datetime
     # doubles as the optimistic-concurrency token clients echo back via If-Match.
     updated_at: datetime
+
+
+class ArticleListOut(BaseModel):
+    items: list[ArticleOut]
+    # Opaque keyset cursor for the next page; null on the last page
+    next_cursor: str | None
