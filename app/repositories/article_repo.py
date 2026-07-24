@@ -28,11 +28,7 @@ class ArticleRepository:
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
     async def list(
-            self,
-            *,
-            limit: int,
-            after: tuple[datetime, int] | None = None,
-            author_id: int | None = None
+        self, *, limit: int, after: tuple[datetime, int] | None = None, author_id: int | None = None
     ) -> list[Article]:
         """Live articles, newest first with id as deterministic tiebreaker.
 
@@ -48,7 +44,7 @@ class ArticleRepository:
             stmt = stmt.where(
                 or_(
                     Article.created_at < after_created_at,
-                    and_(Article.created_at == after_created_at, Article.id < after_id)
+                    and_(Article.created_at == after_created_at, Article.id < after_id),
                 )
             )
         stmt = stmt.order_by(Article.created_at.desc(), Article.id.desc()).limit(limit)

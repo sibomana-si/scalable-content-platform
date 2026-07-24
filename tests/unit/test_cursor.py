@@ -30,8 +30,8 @@ def test_cursor_is_url_safe_and_opaque():
     cursor = encode_cursor(datetime(2026, 7, 18, 12, 30, 45, 123456), 42)
 
     assert cursor == cursor.strip()
-    assert all(c.isalnum() or c in "-_" for c in cursor) # no padding, no reserved chars
-    assert "2026" not in cursor # not a plainly readable timestamp
+    assert all(c.isalnum() or c in "-_" for c in cursor)  # no padding, no reserved chars
+    assert "2026" not in cursor  # not a plainly readable timestamp
 
 
 @pytest.mark.parametrize(
@@ -39,20 +39,19 @@ def test_cursor_is_url_safe_and_opaque():
     [
         "",
         "not base64 !!",
-        base64.urlsafe_b64encode(b"hello").decode(),    # wrong shape: no separator
-        base64.urlsafe_b64encode(b"123").decode(),      # missing id part
-        base64.urlsafe_b64encode(b"123:").decode(),     # empty id part
-        base64.urlsafe_b64encode(b":123").decode(),     # empty timestamp part
+        base64.urlsafe_b64encode(b"hello").decode(),  # wrong shape: no separator
+        base64.urlsafe_b64encode(b"123").decode(),  # missing id part
+        base64.urlsafe_b64encode(b"123:").decode(),  # empty id part
+        base64.urlsafe_b64encode(b":123").decode(),  # empty timestamp part
         base64.urlsafe_b64encode(b"abc:def").decode(),  # non-integer parts
-        base64.urlsafe_b64encode(b"12.5:3").decode(),   # non-integer timestamp
-        base64.urlsafe_b64encode(b"1:2:3").decode(),    # too many parts
-        base64.urlsafe_b64encode(b"-1:5").decode(),     # negative timestamp
-        base64.urlsafe_b64encode(b"100:0").decode(),    # non-positive id
-        base64.urlsafe_b64encode(b"100:-7").decode(),   # negative id
-        base64.urlsafe_b64encode("100:٣".encode()).decode() # non-ASCII digit
-    ]
+        base64.urlsafe_b64encode(b"12.5:3").decode(),  # non-integer timestamp
+        base64.urlsafe_b64encode(b"1:2:3").decode(),  # too many parts
+        base64.urlsafe_b64encode(b"-1:5").decode(),  # negative timestamp
+        base64.urlsafe_b64encode(b"100:0").decode(),  # non-positive id
+        base64.urlsafe_b64encode(b"100:-7").decode(),  # negative id
+        base64.urlsafe_b64encode("100:٣".encode()).decode(),  # non-ASCII digit
+    ],
 )
 def test_malformed_cursors_are_rejected(bad_cursor: str):
     with pytest.raises(InvalidCursorError):
         decode_cursor(bad_cursor)
-

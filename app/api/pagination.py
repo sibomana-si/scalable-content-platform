@@ -32,7 +32,7 @@ def decode_cursor(cursor: str) -> tuple[datetime, int]:
         padded = cursor.encode("ascii") + b"=" * (-len(cursor) % 4)
         micros_part, sep, id_part = base64.urlsafe_b64decode(padded).decode("ascii").partition(":")
         if not (sep and micros_part.isdigit() and id_part.isdigit()):
-            raise ValueError # ASCII digits only, no signs, spaces, or extra parts
+            raise ValueError  # ASCII digits only, no signs, spaces, or extra parts
         micros, article_id = int(micros_part), int(id_part)
         if article_id <= 0:
             raise ValueError

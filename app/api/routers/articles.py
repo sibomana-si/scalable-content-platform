@@ -43,10 +43,10 @@ async def create_article(
 
 @router.get("", response_model=ArticleListOut)
 async def list_articles(
-        service: ArticleServiceDep,
-        limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
-        cursor: str | None = None,
-        author: Annotated[int | None, Query(ge=1)] = None
+    service: ArticleServiceDep,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+    cursor: str | None = None,
+    author: Annotated[int | None, Query(ge=1)] = None,
 ) -> ArticleListOut:
     after = decode_cursor(cursor) if cursor is not None else None
     items, next_after = await service.list_articles(limit=limit, after=after, author_id=author)

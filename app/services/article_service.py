@@ -23,11 +23,7 @@ class ArticleService:
         return article
 
     async def list_articles(
-            self,
-            *,
-            limit: int,
-            after: tuple[datetime, int] | None = None,
-            author_id: int | None = None
+        self, *, limit: int, after: tuple[datetime, int] | None = None, author_id: int | None = None
     ) -> tuple[list[Article], tuple[datetime, int] | None]:
         """One page plus the keyset position of the next, or 'None' on the last page.
 

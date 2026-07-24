@@ -24,7 +24,7 @@ async def _walk(client, limit: int, author: int | None = None) -> list[dict]:
     params: dict = {"limit": limit}
     if author is not None:
         params["author"] = author
-    for _ in range(1000):   # hard stop: a cursor loop must not hang the suite
+    for _ in range(1000):  # hard stop: a cursor loop must not hang the suite
         page = (await client.get(BASE, params=params)).json()
         items.extend(page["items"])
         if page["next_cursor"] is None:
@@ -84,7 +84,7 @@ async def test_full_walk_has_no_duplicates_or_skips(client, user_factory, articl
 
     items = await _walk(client, limit=10)
     walked_ids = [item["id"] for item in items]
-    assert len(walked_ids) == len(set(walked_ids)) == 45    # no duplicates, no skips
+    assert len(walked_ids) == len(set(walked_ids)) == 45  # no duplicates, no skips
     assert set(walked_ids) == created_ids
     # Deterministic order: newest-first across the whole chain, not just within pages.
     keys = [(item["created_at"], item["id"]) for item in items]
@@ -101,7 +101,7 @@ async def test_created_at_ties_across_page_boundary(client, user_factory, articl
     walked_ids = [item["id"] for item in items]
     assert len(walked_ids) == len(set(walked_ids)) == 5
     assert set(walked_ids) == tie_ids
-    assert walked_ids == sorted(walked_ids, reverse=True)   # id desc within the tie
+    assert walked_ids == sorted(walked_ids, reverse=True)  # id desc within the tie
 
 
 async def test_soft_deleted_articles_are_excluded(client, user_factory, article_factory):
