@@ -22,6 +22,22 @@ class ArticleService:
             raise ArticleNotFoundError("Article does not exist.")
         return article
 
+    async def list_articles(
+        self, *, limit: int, after: tuple[datetime, int] | None = None, author_id: int | None = None
+    ) -> tuple[list[Article], tuple[datetime, int] | None]:
+        """One page plus the keyset position of the next, or 'None' on the last page.
+
+        Fetches 'limit + 1' rows; the sentinel row proves another page exists without
+        a COUNT over the table.
+        """
+
+        rows = await self._articles.list(limit=limit + 1, after=after, author_id=author_id)
+        if len(rows) <= limit:
+            return rows, None
+        page = rows[:limit]
+        last = page[-1]
+        return page, (last.created_at, last.id)
+
     async def update(
         self, actor: User, article_id: int, *, title: str, body: str, expected_updated_at: datetime
     ) -> Article:

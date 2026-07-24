@@ -52,6 +52,67 @@ async def test_save_persists_changes_and_advances_updated_at(repo, db_session, a
     assert fetched.updated_at > original_updated_at  # MySQL ON UPDATE CURRENT_TIMESTAMP(6)
 
 
+async def test_list_orders_newest_first_with_id_tiebreak(repo, user_factory, article_factory):
+    author = await user_factory()
+    t0 = datetime(2026, 7, 1, 12, 0, 0)
+    older = await article_factory(author=author, created_at=t0.replace(second=1))
+    tie_a = await article_factory(author=author, created_at=t0.replace(second=2))
+    tie_b = await article_factory(author=author, created_at=t0.replace(second=2))
+
+    rows = await repo.list(limit=10)
+
+    assert [a.id for a in rows] == [tie_b.id, tie_a.id, older.id]
+
+
+async def test_list_keyset_predicate_splits_ties_exactly(repo, user_factory, article_factory):
+    """Continuation from inside a created_at tie must return strictly-earlier rows:
+    same created_at with smaller id, then older created_at, nothing else."""
+
+    author = await user_factory()
+    t0 = datetime(2026, 7, 1, 12, 0, 0)
+    older = await article_factory(author=author, created_at=t0.replace(second=1))
+    ties = [await article_factory(author=author, created_at=t0.replace(second=2)) for _ in range(3)]
+    newer = await article_factory(author=author, created_at=t0.replace(second=3))
+
+    middle = sorted(ties, key=lambda a: a.id)[1]
+    rows = await repo.list(limit=10, after=(middle.created_at, middle.id))
+
+    expected = [a.id for a in ties if a.id < middle.id] + [older.id]
+    assert [a.id for a in rows] == expected
+    assert newer.id not in {a.id for a in rows}
+
+
+async def test_list_excludes_soft_deleted_inside_window(repo, user_factory, article_factory):
+    author = await user_factory()
+    t0 = datetime(2026, 7, 1, 12, 0, 0)
+    first = await article_factory(author=author, created_at=t0.replace(second=1))
+    await article_factory(
+        author=author, created_at=t0.replace(second=2), deleted_at=datetime(2026, 7, 2)
+    )
+    last = await article_factory(author=author, created_at=t0.replace(second=3))
+    rows = await repo.list(limit=10)
+    assert [a.id for a in rows] == [last.id, first.id]
+
+
+async def test_list_filters_by_author(repo, user_factory, article_factory):
+    alice, bob = await user_factory(), await user_factory()
+    t0 = datetime(2026, 7, 1, 12, 0, 0)
+    mine = await article_factory(author=alice, created_at=t0)
+    await article_factory(author=bob, created_at=t0.replace(second=1))
+    rows = await repo.list(limit=10, author_id=alice.id)
+    assert [a.id for a in rows] == [mine.id]
+
+
+async def test_list_respects_limit(repo, user_factory, article_factory):
+    author = await user_factory()
+    t0 = datetime(2026, 7, 1, 12, 0, 0)
+    for i in range(4):
+        await article_factory(author=author, created_at=t0.replace(second=i + 1))
+
+    rows = await repo.list(limit=2)
+    assert len(rows) == 2
+
+
 async def test_soft_delete_marks_row_but_keeps_it(repo, db_session, article_factory):
     article = await article_factory()
 

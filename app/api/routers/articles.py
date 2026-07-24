@@ -4,10 +4,11 @@ require the If-Match optimistic-concurrency precondition."""
 from datetime import datetime
 from typing import Annotated
 
-from fastapi import APIRouter, Header, Response
+from fastapi import APIRouter, Header, Query, Response
 
 from app.api.deps import ArticleServiceDep, CurrentUser, SessionDep
-from app.schemas.article import ArticleIn, ArticleOut
+from app.api.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, decode_cursor, encode_cursor
+from app.schemas.article import ArticleIn, ArticleListOut, ArticleOut
 from app.services.exceptions import PreconditionRequiredError
 
 router = APIRouter(prefix="/v1/articles", tags=["articles"])
@@ -37,12 +38,25 @@ async def create_article(
 ) -> ArticleOut:
     article = await service.create(actor, title=payload.title, body=payload.body)
     await session.commit()
-    return article
+    return ArticleOut.model_validate(article)
+
+
+@router.get("", response_model=ArticleListOut)
+async def list_articles(
+    service: ArticleServiceDep,
+    limit: Annotated[int, Query(ge=1, le=MAX_PAGE_SIZE)] = DEFAULT_PAGE_SIZE,
+    cursor: str | None = None,
+    author: Annotated[int | None, Query(ge=1)] = None,
+) -> ArticleListOut:
+    after = decode_cursor(cursor) if cursor is not None else None
+    items, next_after = await service.list_articles(limit=limit, after=after, author_id=author)
+    next_cursor = encode_cursor(*next_after) if next_after is not None else None
+    return ArticleListOut(items=items, next_cursor=next_cursor)
 
 
 @router.get("/{article_id}", response_model=ArticleOut)
 async def get_article(article_id: int, service: ArticleServiceDep) -> ArticleOut:
-    return await service.get(article_id)
+    return ArticleOut.model_validate(await service.get(article_id))
 
 
 @router.put("/{article_id}", response_model=ArticleOut)
@@ -59,7 +73,7 @@ async def update_article(
         actor, article_id, title=payload.title, body=payload.body, expected_updated_at=expected
     )
     await session.commit()
-    return article
+    return ArticleOut.model_validate(article)
 
 
 @router.delete("/{article_id}", status_code=204)
