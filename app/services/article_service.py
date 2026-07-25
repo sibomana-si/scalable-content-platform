@@ -41,28 +41,35 @@ class ArticleService:
     async def update(
         self, actor: User, article_id: int, *, title: str, body: str, expected_updated_at: datetime
     ) -> Article:
-        article = await self.get(article_id)
+        article = await self.get(article_id)  # 404 for missing/soft-deleted
         self._authorize(actor, article)
-        self._check_precondition(article, expected_updated_at)
-        article.title = title
-        article.body = body
-        return await self._articles.save(article)
+        rowcount = await self._articles.update_cas(
+            article_id, expected_updated_at, title=title, body=body
+        )
+        if rowcount == 0:
+            await self._raise_conflict_or_not_found(article_id)
+        return await self.get(article_id)  # re-read: MySQL advanced updated_at server-side
 
     async def delete(self, actor: User, article_id: int, *, expected_updated_at: datetime) -> None:
         article = await self.get(article_id)
         self._authorize(actor, article)
-        self._check_precondition(article, expected_updated_at)
-        await self._articles.soft_delete(article)
+        rowcount = await self._articles.soft_delete_cas(article_id, expected_updated_at)
+        if rowcount == 0:
+            await self._raise_conflict_or_not_found(article_id)
+
+    async def _raise_conflict_or_not_found(self, article_id: int) -> None:
+        """
+        Zero CAS rows is a stale token (409) only while the row is still live;
+        otherwise the article is simply gone (404).
+        """
+
+        if await self._articles.get(article_id) is None:
+            raise ArticleNotFoundError("Article does not exist.")
+        raise ConflictError(
+            "The article changed since it was read; re-fetch and retry with the current updated_at."
+        )
 
     @staticmethod
     def _authorize(actor: User, article: Article) -> None:
         if article.author_id != actor.id and not actor.is_admin:
             raise ForbiddenError("Only the author or an admin may modify this article.")
-
-    @staticmethod
-    def _check_precondition(article: Article, expected_updated_at: datetime) -> None:
-        if article.updated_at != expected_updated_at:
-            raise ConflictError(
-                "The article changed since it was read; re-fetch and retry with the "
-                "current updated_at."
-            )

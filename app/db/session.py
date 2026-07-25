@@ -1,7 +1,7 @@
 """Async SQLAlchemy engine, session factory, and request-scoped session dependency.
 
 The engine and sessionmaker are created lazily and cached, so importing this module never
-opens a connection - the first real connection happens on first use (keeps ``/health/live``
+opens a connection; the first real connection happens on first use (keeps ``/health/live``
 dependency-free). The async app driver is aiomysql (``mysql+aiomysql://``).
 """
 
@@ -34,7 +34,13 @@ def get_sessionmaker() -> async_sessionmaker[AsyncSession]:
 
 
 async def get_session() -> AsyncGenerator[AsyncSession, None]:
-    """FastAPI dependency yielding one AsyncSession per request."""
+    """
+    FastAPI dependency: one AsyncSession, one transaction per request.
 
-    async with get_sessionmaker()() as session:
+    The 'begin()' block commits when the handler returns cleanly and rolls back when
+    anything raises through it (domain errors included; they become responses in the
+    app-level exception handlers after this teardown). Handlers never commit.
+    """
+
+    async with get_sessionmaker()() as session, session.begin():
         yield session

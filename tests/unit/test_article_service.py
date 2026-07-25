@@ -47,12 +47,35 @@ class FakeArticleRepository:
             return None
         return article
 
-    async def save(self, article: Article) -> Article:
-        article.updated_at = self._now()
-        return article
+    async def update_cas(
+        self, article_id: int, expected_updated_at: datetime, *, title: str, body: str
+    ) -> int:
+        """
+        Mirror the SQL CAS: one atomic check-and-write, 0 rows unless the row is
+        live and the token matches.
+        """
 
-    async def soft_delete(self, article: Article) -> None:
+        article = self.rows.get(article_id)
+        if (
+            article is None
+            or article.deleted_at is not None
+            or article.updated_at != expected_updated_at
+        ):
+            return 0
+        article.title, article.body = title, body
+        article.updated_at = self._now()
+        return 1
+
+    async def soft_delete_cas(self, article_id: int, expected_updated_at: datetime) -> int:
+        article = self.rows.get(article_id)
+        if (
+            article is None
+            or article.deleted_at is not None
+            or article.updated_at != expected_updated_at
+        ):
+            return 0
         article.deleted_at = self._now()
+        return 1
 
 
 def make_user(user_id: int, role: str = "user") -> User:
@@ -71,7 +94,7 @@ def repo() -> FakeArticleRepository:
 
 @pytest.fixture
 def service(repo: FakeArticleRepository) -> ArticleService:
-    return ArticleService(repo)
+    return ArticleService(repo)  # type: ignore[arg-type]
 
 
 @pytest.fixture
@@ -96,9 +119,30 @@ async def test_get_missing_raises_not_found(service):
 
 async def test_get_soft_deleted_raises_not_found(service, repo, owner):
     created = await service.create(owner, title="t", body="b")
-    await repo.soft_delete(created)
+    await repo.soft_delete_cas(created.id, created.updated_at)
     with pytest.raises(ArticleNotFoundError):
         await service.get(created.id)
+
+
+async def test_update_cas_zero_rows_with_vanished_row_raises_not_found(owner):
+    """
+    CAS returning 0 means stale (409) only while the row still exists; if it vanished
+    between the ownership read and write, the outcome is 404, not 409.
+    """
+
+    class VanishingRepo(FakeArticleRepository):
+        async def update_cas(self, article_id, expected_updated_at, *, title, body) -> int:
+            self.rows.pop(article_id, None)  # concurrent hard-removal between read and write
+            return 0
+
+    repo = VanishingRepo()
+    service = ArticleService(repo)  # type: ignore[arg-type]
+    created = await service.create(owner, title="t", body="b")
+
+    with pytest.raises(ArticleNotFoundError):
+        await service.update(
+            owner, created.id, title="x", body="x", expected_updated_at=created.updated_at
+        )
 
 
 async def test_owner_can_update(service, owner):

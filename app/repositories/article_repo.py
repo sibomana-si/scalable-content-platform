@@ -1,6 +1,8 @@
 from datetime import UTC, datetime
+from typing import cast
 
-from sqlalchemy import and_, or_, select
+from sqlalchemy import and_, or_, select, update
+from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Article
@@ -50,11 +52,46 @@ class ArticleRepository:
         stmt = stmt.order_by(Article.created_at.desc(), Article.id.desc()).limit(limit)
         return list((await self._session.execute(stmt)).scalars())
 
-    async def save(self, article: Article) -> Article:
-        await self._session.flush()
-        await self._session.refresh(article)  # pick up ON UPDATE CURRENT_TIMESTAMP(6)
-        return article
+    async def update_cas(
+        self, article_id: int, expected_updated_at: datetime, *, title: str, body: str
+    ) -> int:
+        """
+        Compare-and-set full replace: one UPDATE whose WHERE carries the precondition,
+        no read-modify-write window. Returns the matched-row count; 0 means stale token,
+        soft-deleted, or gone.
 
-    async def soft_delete(self, article: Article) -> None:
-        article.deleted_at = _utcnow()
-        await self._session.flush()
+        'updated_at' is advanced by MySQL itself (ON UPDATE CURRENT_TIMESTAMP(6)).
+        """
+
+        result = await self._session.execute(
+            update(Article)
+            .where(
+                Article.id == article_id,
+                Article.updated_at == expected_updated_at,
+                Article.deleted_at.is_(None),
+            )
+            .values(title=title, body=body)
+            .execution_options(synchronize_session=False)
+        )
+        # The bulk UPDATE bypasses the identity map; expire cached instances so any
+        # re-read in this transaction sees the new row (incl. the server-set updated_at).
+        self._session.expire_all()
+        return cast(CursorResult, result).rowcount
+
+    async def soft_delete_cas(self, article_id: int, expected_updated_at: datetime) -> int:
+        """Compare-and-set soft delete; same single-statement guarantees as update."""
+
+        result = await self._session.execute(
+            update(Article)
+            .where(
+                Article.id == article_id,
+                Article.updated_at == expected_updated_at,
+                Article.deleted_at.is_(None),
+            )
+            .values(deleted_at=_utcnow())
+            .execution_options(synchronize_session=False)
+        )
+        # The bulk UPDATE bypasses the identity map; expire cached instances so any
+        # re-read in this transaction sees the new row (incl. the server-set updated_at).
+        self._session.expire_all()
+        return cast(CursorResult, result).rowcount
