@@ -6,7 +6,7 @@ from typing import Annotated
 
 from fastapi import APIRouter, Header, Query, Response
 
-from app.api.deps import ArticleServiceDep, CurrentUser, SessionDep
+from app.api.deps import ArticleServiceDep, CurrentUser
 from app.api.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, decode_cursor, encode_cursor
 from app.schemas.article import ArticleIn, ArticleListOut, ArticleOut
 from app.services.exceptions import PreconditionRequiredError
@@ -34,11 +34,12 @@ def _parse_if_match(if_match: str | None) -> datetime:
 
 @router.post("", status_code=201, response_model=ArticleOut)
 async def create_article(
-    payload: ArticleIn, actor: CurrentUser, service: ArticleServiceDep, session: SessionDep
+    payload: ArticleIn, actor: CurrentUser, service: ArticleServiceDep
 ) -> ArticleOut:
-    article = await service.create(actor, title=payload.title, body=payload.body)
-    await session.commit()
-    return ArticleOut.model_validate(article)
+    # No commit here: the get_session dependency owns the request transaction.
+    return ArticleOut.model_validate(
+        await service.create(actor, title=payload.title, body=payload.body)
+    )
 
 
 @router.get("", response_model=ArticleListOut)
@@ -51,7 +52,9 @@ async def list_articles(
     after = decode_cursor(cursor) if cursor is not None else None
     items, next_after = await service.list_articles(limit=limit, after=after, author_id=author)
     next_cursor = encode_cursor(*next_after) if next_after is not None else None
-    return ArticleListOut(items=items, next_cursor=next_cursor)
+    return ArticleListOut(
+        items=[ArticleOut.model_validate(item) for item in items], next_cursor=next_cursor
+    )
 
 
 @router.get("/{article_id}", response_model=ArticleOut)
@@ -65,15 +68,14 @@ async def update_article(
     payload: ArticleIn,
     actor: CurrentUser,
     service: ArticleServiceDep,
-    session: SessionDep,
     if_match: IfMatchHeader = None,
 ) -> ArticleOut:
     expected = _parse_if_match(if_match)
-    article = await service.update(
-        actor, article_id, title=payload.title, body=payload.body, expected_updated_at=expected
+    return ArticleOut.model_validate(
+        await service.update(
+            actor, article_id, title=payload.title, body=payload.body, expected_updated_at=expected
+        )
     )
-    await session.commit()
-    return ArticleOut.model_validate(article)
 
 
 @router.delete("/{article_id}", status_code=204)
@@ -81,10 +83,8 @@ async def delete_article(
     article_id: int,
     actor: CurrentUser,
     service: ArticleServiceDep,
-    session: SessionDep,
     if_match: IfMatchHeader = None,
 ) -> Response:
     expected = _parse_if_match(if_match)
     await service.delete(actor, article_id, expected_updated_at=expected)
-    await session.commit()
     return Response(status_code=204)

@@ -39,15 +39,20 @@ async def test_get_excludes_soft_deleted(repo, db_session, article_factory):
     assert await repo.get(article.id) is None
 
 
-async def test_save_persists_changes_and_advances_updated_at(repo, db_session, article_factory):
+async def test_update_cas_persists_changes_and_advances_updated_at(
+    repo, db_session, article_factory
+):
     article = await article_factory()
-    original_updated_at = article.updated_at
-
-    article.title, article.body = "new title", "new body"
-    await repo.save(article)
+    # Capture before the CAS: it expires the instance, and expired attribute access
+    # cannot lazy-refresh under the async session.
+    article_id, original_updated_at = article.id, article.updated_at
+    rowcount = await repo.update_cas(
+        article_id, original_updated_at, title="new title", body="new body"
+    )
     await db_session.commit()
 
-    fetched = await repo.get(article.id)
+    assert rowcount == 1
+    fetched = await repo.get(article_id)
     assert (fetched.title, fetched.body) == ("new title", "new body")
     assert fetched.updated_at > original_updated_at  # MySQL ON UPDATE CURRENT_TIMESTAMP(6)
 
@@ -113,16 +118,18 @@ async def test_list_respects_limit(repo, user_factory, article_factory):
     assert len(rows) == 2
 
 
-async def test_soft_delete_marks_row_but_keeps_it(repo, db_session, article_factory):
+async def test_soft_delete_cas_marks_row_but_keeps_it(repo, db_session, article_factory):
     article = await article_factory()
+    article_id, token = article.id, article.updated_at
 
-    await repo.soft_delete(article)
+    rowcount = await repo.soft_delete_cas(article_id, token)
     await db_session.commit()
 
-    assert await repo.get(article.id) is None  # invisible to reads
+    assert rowcount == 1
+    assert await repo.get(article_id) is None  # invisible to reads
     row = (
         await db_session.execute(
-            text("SELECT deleted_at FROM articles WHERE id = :id"), {"id": article.id}
+            text("SELECT deleted_at FROM articles WHERE id = :id"), {"id": article_id}
         )
     ).one()
     assert row.deleted_at is not None
