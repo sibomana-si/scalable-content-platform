@@ -18,15 +18,15 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Capacity & Scaling Model](architecture/capacity-scaling-model.md) — 🟩
 
 ## API
-- [OpenAPI Spec](api/openapi.md) — 🟥
-- [API Reference / Usage Guide](api/api-reference.md) — 🟥
-- [Error Catalog](api/error-catalog.md) — 🟥
-- [Versioning & Deprecation Policy](api/versioning-policy.md) — 🟥
+- [OpenAPI Spec](api/openapi.md) — 🟨
+- [API Reference / Usage Guide](api/api-reference.md) — 🟩
+- [Error Catalog](api/error-catalog.md) — 🟩
+- [Versioning & Deprecation Policy](api/versioning-policy.md) — 🟩
 
 ## Data
 - [Data Model / ERD](data/data-model.md) — 🟩
 - [Schema & Migrations Guide](data/migrations.md) — 🟩
-- [Indexing & Query Strategy](data/indexing-strategy.md) — 🟨
+- [Indexing & Query Strategy](data/indexing-strategy.md) — 🟩
 - [Caching Strategy](data/caching-strategy.md) — 🟩
 
 ## Security
@@ -56,6 +56,7 @@ Documentation for the **Scalable Content Platform Backend**.
 
 ## Development
 - [Testing Strategy & TDD Guide](development/testing-strategy.md) — 🟩
+- [Changelog](CHANGELOG.md) — 🟩
 
 ## Reports
-- [Weekly Deliverables](reports/README.md) — 🟥
+- [Weekly Deliverables](reports/README.md) — 🟨

@@ -181,11 +181,11 @@ stateDiagram-v2
 
 `articles.updated_at` is the concurrency token:
 
-- Read responses expose the article's `updated_at`; the API derives its `ETag`/precondition value
-  from the **full microsecond-precision** value, treated by clients as opaque.
-- `PUT`/`DELETE` require the precondition (`If-Match` preferred; `If-Unmodified-Since` accepted
-  with the documented caveat that HTTP-date granularity is one second — the reason `If-Match` is
-  canonical). The update runs as
+- Read responses expose the article's `updated_at` at **full microsecond precision**; clients echo
+  it back as the precondition value, treated as opaque.
+- `PUT`/`DELETE` require the precondition via **`If-Match`** (a missing precondition ⇒ `422`).
+  `If-Unmodified-Since` is **not** accepted — its one-second HTTP-date granularity is too coarse for
+  `DATETIME(6)`, which is why `If-Match` is canonical. The update runs as
   `UPDATE ... WHERE id = ? AND updated_at = ?`; **zero rows affected ⇒ `409`** — the
   compare-and-set happens in one statement, no read-modify-write race.
 - A separate integer `version` column was considered and rejected for the MVP: `updated_at` must
