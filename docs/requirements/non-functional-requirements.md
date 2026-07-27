@@ -51,7 +51,7 @@ Secure API boundaries by default. Detailed design lives in [security/](../securi
 | Secret handling | Env / secret store only; never committed or logged — see [secrets-management](../security/secrets-management.md) |
 | Dependency vulnerabilities | **No known High/Critical CVEs** in deployed dependencies; automated scanning in CI |
 | OWASP coverage | Address the **OWASP API Security Top 10**; target **ASVS Level 1+** — see [owasp-matrix](../security/owasp-matrix.md), [threat-model](../security/threat-model.md) |
-| Abuse protection | Load shedding active in MVP; per-client **rate limiting deferred** ([PRD §13 D2](product-requirements.md)) |
+| Abuse protection | Load shedding and per-client **rate limiting deferred** — not yet built (only a seam exists); planned with the resilience work ([PRD §13 D2](product-requirements.md)) |
 | Audit logging | Security-relevant events (auth failures, role changes, deletes) logged with `request_id` |
 | HTTP hardening | Restrictive CORS; security headers; no stack traces / internal detail in error bodies |
 

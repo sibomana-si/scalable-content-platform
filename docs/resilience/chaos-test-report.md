@@ -1,7 +1,7 @@
 # Chaos / Failure-Injection Report
 ### Validates [fault-tolerance-design.md](fault-tolerance-design.md).
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
+> **Status:** 🟥 Not started — template only; results pending the Week-7 (M7) fault-injection tests · **Owner:** Simon Sibomana
 
 ## Method
 _How failures were injected (e.g. toolkit, `tc` for latency, stopping containers, fault proxies)._

@@ -54,8 +54,10 @@ migrations/
   env.py                    # wires target_metadata, sync URL from env var, compare flags
   script.py.mako
   versions/
-    20260615_a1b2c3d4e5f6_create_roles_users_articles.py
-    20260615_b2c3d4e5f6a7_seed_roles.py
+    20260718_0001_create_roles_users_articles.py
+    20260718_0002_seed_roles.py
+    20260718_0003_idx_articles_deleted_created.py
+    20260718_0004_idx_articles_author_deleted_created.py
 ```
 
 The migration database URL comes from the environment (12-factor,
@@ -262,10 +264,14 @@ CI run as a by-product.
 
 ## 9. CI gates
 
-Added to `.github/workflows/ci.yml` when the first models/migrations land (same trigger as the
-coverage gate — see [testing strategy §5](../development/testing-strategy.md)). All run against
-the **real MySQL 8 service container** already configured in CI, per the no-mocks rule for the
-data layer ([ADR-0006](../architecture/adr/0006-test-driven-development.md)):
+Migrations `0001`–`0004` have landed. Today CI covers them **indirectly**: the integration suite
+migrates a clean database to head (`alembic upgrade head` in `tests/conftest.py`) and asserts the
+schema, and `tests/integration/test_migrations.py` exercises the downgrade→upgrade round-trip. The
+dedicated `alembic`-command gates below are **not yet added to `.github/workflows/ci.yml`** — they
+remain the recommended hardening (`alembic check` in particular catches model↔migration drift the
+suite does not). All are designed to run against the **real MySQL 8 service container** already
+configured in CI, per the no-mocks rule for the data layer
+([ADR-0006](../architecture/adr/0006-test-driven-development.md)):
 
 | Gate | Command | Catches |
 |---|---|---|

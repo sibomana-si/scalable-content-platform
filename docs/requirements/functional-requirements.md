@@ -36,22 +36,22 @@ in the [Glossary](glossary.md). All error responses use the canonical envelope i
 ## FR-004 — Article CRUD
 **Description:** Authenticated users create, update, and (soft-)delete articles; reads are public. Authors manage their own articles; admins manage any.
 **Acceptance criteria:**
-- [ ] **Create:** an authenticated user creates an article owned by that user; it is **immediately public** (no draft/publish state in the MVP); returns `201`.
-- [ ] **Read:** anyone, including anonymous clients, can fetch a non-deleted article by id; a soft-deleted or non-existent article returns `404`.
-- [ ] **Update:** uses **`PUT` full-replace** of the article resource ([PRD §13 D10](product-requirements.md)); an author may update their own article; a non-owner non-admin receives `403`; an admin may update any article. Authorship cannot be changed.
-- [ ] **Delete:** **soft delete** only — the article is marked deleted and excluded from reads, not physically removed; permitted to the author or an admin.
-- [ ] **Optimistic concurrency ([PRD §13 D11](product-requirements.md)):** update/delete require an `updated_at`/version precondition (`If-Unmodified-Since`/`If-Match`); a stale write (the resource changed since the client read it) is rejected with `409` rather than silently overwriting.
-- [ ] **Input bounds:** title and body are validated against **maximum lengths**; an oversized payload is rejected with `422` (also a DoS control — see [NFR Security](non-functional-requirements.md)).
-- [ ] Article bodies are stored **raw** and returned as-is; the documented convention is **Markdown**, rendered client-side — the server does no rendering ([PRD §13 D8](product-requirements.md)).
-- [ ] Every successful write **invalidates** the affected cache entries (see [caching-strategy](../data/caching-strategy.md)).
+- [x] **Create:** an authenticated user creates an article owned by that user; it is **immediately public** (no draft/publish state in the MVP); returns `201`.
+- [x] **Read:** anyone, including anonymous clients, can fetch a non-deleted article by id; a soft-deleted or non-existent article returns `404`.
+- [x] **Update:** uses **`PUT` full-replace** of the article resource ([PRD §13 D10](product-requirements.md)); an author may update their own article; a non-owner non-admin receives `403`; an admin may update any article. Authorship cannot be changed.
+- [x] **Delete:** **soft delete** only — the article is marked deleted and excluded from reads, not physically removed; permitted to the author or an admin.
+- [x] **Optimistic concurrency ([PRD §13 D11](product-requirements.md)):** update/delete require an `updated_at` precondition — implemented as **`If-Match`** with a single-statement compare-and-set (a missing precondition is rejected `422`); a stale write (the resource changed since the client read it) is rejected with `409` rather than silently overwriting. (`If-Unmodified-Since` is not accepted — its 1-second resolution is too coarse for `DATETIME(6)`.)
+- [x] **Input bounds:** title and body are validated against **maximum lengths**; an oversized payload is rejected with `422` (also a DoS control — see [NFR Security](non-functional-requirements.md)).
+- [x] Article bodies are stored **raw** and returned as-is; the documented convention is **Markdown**, rendered client-side — the server does no rendering ([PRD §13 D8](product-requirements.md)).
+- [ ] Every successful write **invalidates** the affected cache entries (see [caching-strategy](../data/caching-strategy.md)). _(Deferred — no cache is wired yet; the service keeps a constructor seam.)_
 
 ## FR-005 — Paginated / Filtered Reads
 **Description:** Public list endpoints support pagination and filtering with stable ordering.
 **Acceptance criteria:**
-- [ ] List results exclude soft-deleted articles and require no authentication.
-- [ ] Pagination uses **keyset/cursor** on `(created_at, id)` ([PRD §13 D9](product-requirements.md)), not `OFFSET`; the response returns an opaque cursor for the next page. Page size is bounded by an enforced default and maximum.
-- [ ] Filtering by **`author`** is supported — the only filter field in the MVP ([PRD §13 D7](product-requirements.md)); ordering is deterministic and stable across pages (the `(created_at, id)` cursor guarantees no duplicates/skips between pages).
-- [ ] List reads are served via cache-aside and meet the read-path P95 target ([NFR](non-functional-requirements.md)).
+- [x] List results exclude soft-deleted articles and require no authentication.
+- [x] Pagination uses **keyset/cursor** on `(created_at, id)` ([PRD §13 D9](product-requirements.md)), not `OFFSET`; the response returns an opaque cursor for the next page. Page size is bounded by an enforced default (20) and maximum (100).
+- [x] Filtering by **`author`** is supported — the only filter field in the MVP ([PRD §13 D7](product-requirements.md)); ordering is deterministic and stable across pages (the `(created_at, id)` cursor guarantees no duplicates/skips between pages).
+- [ ] List reads are served via cache-aside and meet the read-path P95 target ([NFR](non-functional-requirements.md)). _(Deferred — cache-aside and load testing are post-MVP; queries are index-backed today.)_
 
 ## FR-006 — Article Retention Purge (background)
 **Description:** A scheduled background worker permanently removes articles that have been soft-deleted longer than the retention window ([PRD §13 D3](product-requirements.md)). Not an API endpoint — it runs off the request path.

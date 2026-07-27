@@ -1,7 +1,7 @@
 # Load Test Report
 
 ### Executes [load-test-plan.md](load-test-plan.md).
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-12
+> **Status:** 🟥 Not started — template only; results pending the Week-6 (M6) load test · **Owner:** Simon Sibomana
 
 ## Summary
 _One-paragraph headline result (e.g. "Achieved P95 of Xms at Y req/s with cache enabled; 4.2× throughput vs. baseline")._
