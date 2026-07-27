@@ -66,6 +66,33 @@ def test_seed_is_idempotent(alembic_config: Config, sync_engine: sa.Engine) -> N
     assert count == 2
 
 
+def test_article_list_indexes_exist_with_exact_column_order(
+    alembic_config: Config, sync_engine: sa.Engine
+) -> None:
+
+    command.upgrade(alembic_config, "head")
+
+    with sync_engine.connect() as conn:
+        rows = conn.execute(
+            sa.text(
+                "SELECT index_name, seq_in_index, column_name "
+                "FROM information_schema.statistics "
+                "WHERE table_schema = DATABASE() AND table_name = 'articles' "
+                "AND index_name IN "
+                "('idx_articles_deleted_created', 'idx_articles_author_deleted_created') "
+                "ORDER BY index_name, seq_in_index"
+            )
+        ).all()
+
+    indexes: dict[str, list[str]] = {}
+    for index_name, _, column_name in rows:
+        indexes.setdefault(index_name, []).append(column_name)
+    assert indexes == {
+        "idx_articles_author_deleted_created": ["author_id", "deleted_at", "created_at"],
+        "idx_articles_deleted_created": ["deleted_at", "created_at"],
+    }
+
+
 def test_downgrade_base_roundtrip(alembic_config: Config, sync_engine: sa.Engine) -> None:
     command.upgrade(alembic_config, "head")
 
