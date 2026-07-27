@@ -1,7 +1,7 @@
 from datetime import UTC, datetime
 from typing import cast
 
-from sqlalchemy import and_, or_, select, update
+from sqlalchemy import Select, and_, or_, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,6 +12,34 @@ def _utcnow() -> datetime:
     """Naive UTC, matching the DATETIME(6) columns."""
 
     return datetime.now(UTC).replace(tzinfo=None)
+
+
+def build_list_query(
+    *,
+    limit: int,
+    after: tuple[datetime, int] | None = None,
+    author_id: int | None = None,
+) -> Select[tuple[Article]]:
+    """The list query as a statement, module-level so the index regression tests can
+    EXPLAIN the production SQL rather than a lookalike.
+
+    Live articles, newest first with id as deterministic tiebreaker. 'after' is
+    the exclusive keyset position '(created_at, id)' of the previous page's last row:
+    strictly-older rows, or same-instant rows with a smaller id.
+    """
+
+    stmt = select(Article).where(Article.deleted_at.is_(None))
+    if author_id is not None:
+        stmt = stmt.where(Article.author_id == author_id)
+    if after is not None:
+        after_created_at, after_id = after
+        stmt = stmt.where(
+            or_(
+                Article.created_at < after_created_at,
+                and_(Article.created_at == after_created_at, Article.id < after_id),
+            )
+        )
+    return stmt.order_by(Article.created_at.desc(), Article.id.desc()).limit(limit)
 
 
 class ArticleRepository:
@@ -32,24 +60,7 @@ class ArticleRepository:
     async def list(
         self, *, limit: int, after: tuple[datetime, int] | None = None, author_id: int | None = None
     ) -> list[Article]:
-        """Live articles, newest first with id as deterministic tiebreaker.
-
-        "after" is the exclusive keyset position "(created_at, id)" of the previous
-        page's last row: strictly-older rows, or same-instant rows with a smaller id.
-        """
-
-        stmt = select(Article).where(Article.deleted_at.is_(None))
-        if author_id is not None:
-            stmt = stmt.where(Article.author_id == author_id)
-        if after is not None:
-            after_created_at, after_id = after
-            stmt = stmt.where(
-                or_(
-                    Article.created_at < after_created_at,
-                    and_(Article.created_at == after_created_at, Article.id < after_id),
-                )
-            )
-        stmt = stmt.order_by(Article.created_at.desc(), Article.id.desc()).limit(limit)
+        stmt = build_list_query(limit=limit, after=after, author_id=author_id)
         return list((await self._session.execute(stmt)).scalars())
 
     async def update_cas(

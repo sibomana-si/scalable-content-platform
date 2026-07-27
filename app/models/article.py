@@ -1,6 +1,6 @@
 from datetime import datetime
 
-from sqlalchemy import ForeignKey, String, text
+from sqlalchemy import ForeignKey, Index, String, text
 from sqlalchemy.dialects.mysql import BIGINT, DATETIME, MEDIUMTEXT
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -9,11 +9,18 @@ from app.db.base import Base
 
 class Article(Base):
     __tablename__ = "articles"
-    __table_args__ = {
-        "mysql_engine": "InnoDB",
-        "mysql_charset": "utf8mb4",
-        "mysql_collate": "utf8mb4_0900_ai_ci",
-    }
+    # Composite list indexes: MySQL has no partial indexes, so
+    # deleted_at is a leading key column instead of a WHERE clause; created_at follows
+    # for the keyset order, and InnoDB's implicit PK suffix supplies the id tiebreaker.
+    __table_args__ = (
+        Index("idx_articles_deleted_created", "deleted_at", "created_at"),
+        Index("idx_articles_author_deleted_created", "author_id", "deleted_at", "created_at"),
+        {
+            "mysql_engine": "InnoDB",
+            "mysql_charset": "utf8mb4",
+            "mysql_collate": "utf8mb4_0900_ai_ci",
+        },
+    )
 
     id: Mapped[int] = mapped_column(BIGINT(unsigned=True), primary_key=True, autoincrement=True)
     author_id: Mapped[int] = mapped_column(
