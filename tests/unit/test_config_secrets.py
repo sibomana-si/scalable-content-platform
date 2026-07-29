@@ -31,7 +31,9 @@ def test_jwt_settings_load_from_environment(monkeypatch: pytest.MonkeyPatch) -> 
     assert settings.jwt_expire_seconds == 60
 
 
-def test_require_signing_key_raises_when_secret_is_empty() -> None:
+def test_require_signing_key_raises_when_secret_is_empty(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Clear JWT_SECRET from environment to ensure it's actually empty
+    monkeypatch.delenv("JWT_SECRET", raising=False)
     # jwt_secret defaults to ""
     settings = Settings(_env_file=None)  # type: ignore[call-arg]
 
