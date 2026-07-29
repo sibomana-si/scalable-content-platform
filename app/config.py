@@ -3,6 +3,7 @@
 from functools import lru_cache
 from urllib.parse import quote_plus
 
+from pydantic import SecretStr
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -26,11 +27,25 @@ class Settings(BaseSettings):
     redis_url: str = "redis://localhost:6379/0"
 
     # --- Auth (JWT) ---
-    jwt_secret: str = ""
+    # SecretStr keeps the signing key out of repr()/logs; read it via require_signing_key().
+    jwt_secret: SecretStr = SecretStr("")
+    jwt_algorithm: str = "HS256"
     jwt_expire_seconds: int = 900
 
     # --- Observability ---
     otel_exporter_otlp_endpoint: str = ""
+
+    def require_signing_key(self) -> str:
+        """Return the JWT signing key, or fail loudly if it is unset.
+
+        Called at token-signing time so a misconfigured deployment refuses to mint
+        tokens rather than silently signing with an empty key.
+        """
+
+        secret = self.jwt_secret.get_secret_value()
+        if not secret:
+            raise RuntimeError("JWT_SECRET is not configured; refusing to sign or verify tokens.")
+        return secret
 
     def _database_url(self, driver: str) -> str:
         # Credentials are URL-encoded so passwords with reserved characters are safe.
