@@ -18,9 +18,9 @@ Consistent error responses are an explicit requirement. Define one canonical sch
 
 ## Codes
 | Code | HTTP | Meaning | Notes |
-|---|---|---|---|
+|---|---|---|-|
 | `VALIDATION_ERROR` | 422 | Request failed validation | Include field details |
-| `UNAUTHENTICATED` | 401 | Missing/unknown caller identity | Today: absent or unresolvable `X-User-Id` dev-stub header; becomes missing/invalid/expired JWT post-FR-002 |
+| `UNAUTHENTICATED` | 401 | Missing/invalid caller identity | Missing, malformed, expired, or tampered `Authorization: Bearer` JWT on a protected route, invalid login credentials, or a token whose subject no longer resolves to a `users` row. Always a generic message (no reason leaked, no user enumeration). |
 | `FORBIDDEN` | 403 | Authenticated but lacks role | |
 | `ARTICLE_NOT_FOUND` | 404 | Article does not exist | |
 | `CONFLICT` | 409 | Duplicate/constraint violation, or **stale write** (optimistic-concurrency precondition failed) | Lost-update protection on PUT/DELETE — see [PRD §13 D11](../requirements/product-requirements.md) |

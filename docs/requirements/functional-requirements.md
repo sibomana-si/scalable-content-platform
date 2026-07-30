@@ -1,6 +1,6 @@
 # Functional Requirements
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-06-09
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-27
 
 Each requirement uses a stable ID (`FR-xxx`) and includes acceptance criteria. These criteria reflect the
 MVP product decisions recorded in [product-requirements.md](product-requirements.md) §13 (15-minute access
@@ -11,19 +11,19 @@ in the [Glossary](glossary.md). All error responses use the canonical envelope i
 ## FR-001 — User Registration
 **Description:** A visitor can create a user account with a unique identifier and a password.
 **Acceptance criteria:**
-- [ ] Given valid, unique credentials, when a visitor registers, then an account is created with the default role `user` and a `201` is returned (the password is never echoed back).
-- [ ] Given an identifier that is already registered, when registering, then the request is rejected (`409`) and no duplicate account is created.
+- [x] Given valid, unique credentials, when a visitor registers, then an account is created with the default role `user` and a `201` is returned (the password is never echoed back).
+- [x] Given an identifier that is already registered, when registering, then the request is rejected (`409`) and no duplicate account is created.
 - [ ] Given malformed input (missing fields, bad email/username format, password failing the policy, or any field exceeding its **maximum length**), then `422` with field-level errors and no account is created.
-- [ ] **Password policy ([PRD §13 D6](product-requirements.md)):** minimum 12 characters; no mandatory composition or rotation rules; new passwords are screened against a known-breached-password list and rejected (`422`) on a match.
-- [ ] Passwords are stored only as a salted hash — never in plaintext, never returned, never logged.
+- [ ] **Password policy ([PRD §13 D6](product-requirements.md)):** minimum 12 characters; no mandatory composition or rotation rules; new passwords are screened against a known-breached-password list and rejected (`422`) on a match. _(Breached-list screening is a **local bundled blocklist** behind a pluggable interface; a live HIBP k-anonymity checker is a documented seam.)_
+- [x] Passwords are stored only as a salted hash (**Argon2id**) — never in plaintext, never returned, never logged.
 
 ## FR-002 — User Login (JWT)
 **Description:** A registered user authenticates and receives a short-lived JWT access token.
 **Acceptance criteria:**
-- [ ] Given valid credentials, when logging in, then a signed JWT access token with a **15-minute** expiry is returned.
-- [ ] The token carries subject (user) and role claims used by authorization (FR-003).
-- [ ] Given invalid credentials, then `401` with a generic message (no user-enumeration / no distinction between "unknown user" and "wrong password").
-- [ ] No refresh token is issued in the MVP; on expiry the client re-authenticates.
+- [x] Given valid credentials, when logging in, then a signed JWT access token (**HS256**) with a **15-minute** expiry is returned.
+- [x] The token carries subject (`sub`, user id) and `role` claims (plus `iat`/`exp`) used by authorization (FR-003).
+- [x] Given invalid credentials, then `401` with a generic message (no user-enumeration / no distinction between "unknown user" and "wrong password"; login timing is equalized for unknown emails).
+- [x] No refresh token is issued in the MVP; on expiry the client re-authenticates.
 
 ## FR-003 — Role-Based Authorization
 **Description:** `user` vs. `admin` permissions are enforced via middleware on protected routes.

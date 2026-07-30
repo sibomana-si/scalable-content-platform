@@ -1,6 +1,6 @@
 # API Reference / Usage Guide
 
-> **Status:** 🟩 Current for the shipped `/v1/articles` API (auth endpoints planned) · Authoritative schema lives in [openapi.md](openapi.md).
+> **Status:** 🟩 Current for the shipped `/v1/articles` and `/v1/auth` APIs · Authoritative schema lives in [openapi.md](openapi.md).
 
 ## Base URL & Versioning
 - Base: `/v1`
@@ -8,18 +8,29 @@
 
 ## Authentication Flow
 
-**Current (dev stub):** there are no auth endpoints yet. Authenticated routes identify the caller
-from a dev-only `X-User-Id` header that must resolve to a real `users` row; a missing or unknown id
-returns `401 UNAUTHENTICATED`. Ownership/admin authorization on top of it is real and enforced.
+Register, then log in to obtain a short-lived JWT access token, and send it as 
+`Authorization: Bearer <token>` on protected (write) routes. Tokens are **HS256**, carry 
+`sub`/`role`/`iat`/`exp`, and expire after 15 minutes; there is no refresh token; re-login on 
+expiry (FR-001/FR-002, [authn-authz](../security/authn-authz.md)).
 
 ```bash
-curl -X POST $BASE/v1/articles -H 'X-User-Id: 1' \
-  -d '{"title":"...","body":"..."}' -H 'Content-Type: application/json'
+# 1. Register (201; the password is never echoed back)
+curl -X POST $BASE/v1/auth/register -H 'Content-Type: application/json' \
+  -d '{"email":"me@xample.com","password":"a-strong-passphrase"}'
+  
+# 2. Log in -> {"access_token":"<jwt>","token_type":"bearer"}
+TOKEN=$(curl -sX POST $BASE/v1/auth/login -H 'Content-Type: application/json' \
+  -d '{"email":"me@example.com","password":"a-strong-passphrase"}' | jq -r .access_token)
+  
+# 3. Call a protected route with the bearer token
+curl -X POST $BASE/v1/articles -H "Authorization: Bearer $TOKEN" \
+  -H 'Content-Type: application/json' -d '{"title":"...","body":"..."}'
 ```
 
-**Planned (FR-001/FR-002/FR-003):** register/login endpoints issuing a signed JWT access token, sent
-as `Authorization: Bearer <token>`, with role-based authorization. The Week-3 work replaces only the
-`get_current_user` dependency body — the routes and authorization rules above are unchanged.
+A missing token on a protected route -> `401 UNAUTHENTICATED`; an invalid/expired/tampered token -> 
+`401`; a valid token whose role lacks permission -> `403 FORBIDDEN`. Invalid login credentials return a 
+generic `401` (no user enumeration). Per-resource ownership (author-or-admin) is enforced in the 
+service layer.
 
 ## Pagination & Filtering Conventions
 
@@ -38,19 +49,19 @@ last page. Cursors encode the last row's `(created_at, id)` position, so a walk 
 duplicates or skips rows even as new articles are created ahead of the cursor.
 
 ## Endpoints (summary)
-| Method | Path | Auth | Description |
-|---|---|---|---|
-| GET | `/v1/articles` | **public** | List (paginated) |
-| GET | `/v1/articles/{id}` | **public** | Read one |
-| POST | `/v1/articles` | user | Create (author = caller) |
-| PUT | `/v1/articles/{id}` | owner/admin | Full replace; requires `If-Match` |
-| DELETE | `/v1/articles/{id}` | owner/admin | Soft delete; requires `If-Match` |
-| POST | `/v1/auth/register` | none | Register — _planned (FR-001)_ |
-| POST | `/v1/auth/login` | none | Login — _planned (FR-002)_ |
+| Method | Path | Auth        | Description                              |
+|---|---|-------------|------------------------------------------|
+| GET | `/v1/articles` | **public**  | List (paginated)                         |
+| GET | `/v1/articles/{id}` | **public**  | Read one                                 |
+| POST | `/v1/articles` | user        | Create (author = caller)                 |
+| PUT | `/v1/articles/{id}` | owner/admin | Full replace; requires `If-Match`        |
+| DELETE | `/v1/articles/{id}` | owner/admin | Soft delete; requires `If-Match`         |
+| POST | `/v1/auth/register` | public      | Register -> `201 {id, email, role}`      |
+| POST | `/v1/auth/login` | public      | Login -> `200 {access_token, token_type}` |
 
 Reads are public per FR-005 — anonymous clients can list and fetch live articles (an
-earlier draft of this table wrongly required `user` auth on reads). "user" auth is the dev
-`X-User-Id` stub today (see Authentication Flow).
+earlier draft of this table wrongly required `user` auth on reads). "user" auth means a valid 
+`Authorization: Bearer` JWT (see Authentication Flow).
 
 **Optimistic concurrency (writes):** `PUT`/`DELETE` require
 `If-Match: <updated_at as returned in the article JSON>` (ISO-8601 with microseconds;

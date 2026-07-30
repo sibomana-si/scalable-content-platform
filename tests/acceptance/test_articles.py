@@ -5,6 +5,8 @@ from datetime import datetime, timedelta
 import pytest
 from httpx import AsyncClient, Response
 
+from app.core.security import create_access_token
+
 pytestmark = pytest.mark.integration
 
 BASE = "/v1/articles"
@@ -44,13 +46,15 @@ async def test_create_without_identity_is_401(client):
     assert_error(resp, 401, "UNAUTHENTICATED")
 
 
-async def test_create_with_unknown_user_is_401(client):
-    resp = await client.post(BASE, json=PAYLOAD, headers={"X-User-Id": "999999"})
+async def test_create_with_token_for_unknown_user_is_401(client):
+    # Validly-signed token, but the subject has no users row (e.g. deleted account).
+    token = create_access_token(sub="999999", role="user")
+    resp = await client.post(BASE, json=PAYLOAD, headers={"Authorization": f"Bearer {token}"})
     assert_error(resp, 401, "UNAUTHENTICATED")
 
 
-async def test_create_with_malformed_identity_is_401(client):
-    resp = await client.post(BASE, json=PAYLOAD, headers={"X-User-Id": "not-a-number"})
+async def test_create_with_malformed_token_is_401(client):
+    resp = await client.post(BASE, json=PAYLOAD, headers={"Authorization": "Bearer not-a-real-jwt"})
     assert_error(resp, 401, "UNAUTHENTICATED")
 
 

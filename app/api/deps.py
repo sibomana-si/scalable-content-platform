@@ -2,7 +2,7 @@
 
 from typing import Annotated
 
-from fastapi import Depends, Header
+from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_session
@@ -10,17 +10,19 @@ from app.models import User
 from app.repositories.article_repo import ArticleRepository
 from app.repositories.user_repo import UserRepository
 from app.services.article_service import ArticleService
+from app.services.auth_service import AuthService
 from app.services.exceptions import UnauthenticatedError
 
 SessionDep = Annotated[AsyncSession, Depends(get_session)]
 
 
-async def get_current_user(
-    session: SessionDep, x_user_id: Annotated[str | None, Header()] = None
-) -> User:
-    if x_user_id is None or not x_user_id.isdigit():
+async def get_current_user(request: Request, session: SessionDep) -> User:
+    # The auth middleware has already verified the JWT and attached the principal;
+    # here we resolve it to the live users row (a since-deleted user -> 401).
+    principal = getattr(request.state, "principal", None)
+    if not principal:
         raise UnauthenticatedError("Missing or invalid identity.")
-    user = await UserRepository(session).get_by_id(int(x_user_id))
+    user = await UserRepository(session).get_by_id(int(principal["id"]))
     if user is None:
         raise UnauthenticatedError("Missing or invalid identity.")
     return user
@@ -34,3 +36,10 @@ def get_article_service(session: SessionDep) -> ArticleService:
 
 
 ArticleServiceDep = Annotated[ArticleService, Depends(get_article_service)]
+
+
+def get_auth_service(session: SessionDep) -> AuthService:
+    return AuthService(UserRepository(session))
+
+
+AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]

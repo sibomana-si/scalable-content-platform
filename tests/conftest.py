@@ -23,6 +23,7 @@ from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.security import create_access_token
 from app.db.session import get_engine, get_sessionmaker
 from app.main import create_app
 from app.models import Article, Role, User
@@ -132,7 +133,7 @@ async def user_factory(db_session: AsyncSession) -> Callable[..., Awaitable[User
         user = User(
             email=email or f"user{next(counter)}@example.com",
             password_hash=password_hash,
-            role_id=role_row.id,
+            role=role_row,  # assign the relationship so user.role.name is loaded for token minting
         )
         db_session.add(user)
         await db_session.commit()
@@ -179,8 +180,10 @@ async def article_factory(
 
 @pytest.fixture
 def auth_headers() -> Callable[[User], dict[str, str]]:
+    """Mint a real Bearer JWT for the user, matching the production auth path."""
 
     def _headers(user: User) -> dict[str, str]:
-        return {"X-User-Id": str(user.id)}
+        token = create_access_token(sub=str(user.id), role=user.role.name)
+        return {"Authorization": f"Bearer {token}"}
 
     return _headers
