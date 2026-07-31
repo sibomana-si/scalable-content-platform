@@ -23,6 +23,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - JWT signing configured from the environment: `JWT_SECRET` (held as `SecretStr`, kept out of
   repr/logs), `JWT_ALGORITHM` (default HS256), `JWT_EXPIRE_SECONDS`; the app fails closed if the 
   signing key is unset rather than signing with an empty key.
+- RBAC enforcement (FR-003) in `AuthMiddleware` via a pure, unit-tested route policy
+  (`route_requirement` -> PUBLIC/AUTHENTICATED/ADMIN, `authorize`); 401 (authentication) is enforced 
+  before 403 (role), unknown routes default to authenticated, and per-resource ownership
+  (author-or-admin) stays in the service layer with no 404 existence leak.
 - Alembic migrations `0001`–`0004`: schema (roles/users/articles), role seeds, and the two composite
   list indexes (`idx_articles_deleted_created`, `idx_articles_author_deleted_created`).
 - Test harness and suite (acceptance/unit/integration) with an 80% coverage floor enforced via
