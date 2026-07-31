@@ -23,7 +23,6 @@ from app.api.errors import error_response
 from app.core.security import decode_access_token
 from app.services.exceptions import UnauthenticatedError
 
-
 Principal = dict[str, str]
 
 
