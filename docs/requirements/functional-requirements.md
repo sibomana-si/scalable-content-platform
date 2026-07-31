@@ -28,10 +28,10 @@ in the [Glossary](glossary.md). All error responses use the canonical envelope i
 ## FR-003 — Role-Based Authorization
 **Description:** `user` vs. `admin` permissions are enforced via middleware on protected routes.
 **Acceptance criteria:**
-- [ ] Public read endpoints (FR-005 / article `GET`) require no token.
-- [ ] Given a missing, malformed, or expired token on a write/admin endpoint, then `401`.
-- [ ] Given a valid token whose role lacks the required permission, then `403`.
-- [ ] Admin-only actions (role management, modifying another user's article) reject non-admins with `403`.
+- [x] Public read endpoints (FR-005 / article `GET`) require no token.
+- [x] Given a missing, malformed, or expired token on a write/admin endpoint, then `401` (enforced in `AuthMiddleware` before any role/ownership check).
+- [x] Given a valid token whose role lacks the required permission, then `403`.
+- [x] Admin-only actions reject non-admins with `403`: modifying another user's article is enforced end-to-end (service-layer owner-or-admin); the middleware `ADMIN` route policy is in place and unit-tested for future admin-only HTTP routes (role management), none of which ship in the MVP yet.
 
 ## FR-004 — Article CRUD
 **Description:** Authenticated users create, update, and (soft-)delete articles; reads are public. Authors manage their own articles; admins manage any.

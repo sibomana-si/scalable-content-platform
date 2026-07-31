@@ -154,7 +154,7 @@ async def test_soft_delete_cas_is_idempotent_guarded(article_factory):
 # --- Transaction-per-request boundary ---------------------------------------------------
 
 
-async def test_request_rolls_back_on_unhandled_error(clean_db, user_factory):
+async def test_request_rolls_back_on_unhandled_error(clean_db, user_factory, auth_headers):
     """A handler that writes then blows up must leave nothing behind, and the client
     must still receive the canonical 500 envelope."""
 
@@ -169,7 +169,8 @@ async def test_request_rolls_back_on_unhandled_error(clean_db, user_factory):
 
     transport = ASGITransport(app=app, raise_app_exceptions=False)
     async with AsyncClient(transport=transport, base_url="http://test") as client:
-        resp = await client.post("/_test/boom")
+        # A token is needed only to clear the auth middleware; this route ignores the caller.
+        resp = await client.post("/_test/boom", headers=auth_headers(user))
 
     assert resp.status_code == 500
     error = resp.json()["error"]
