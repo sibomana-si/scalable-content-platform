@@ -16,17 +16,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Optimistic concurrency on writes: `If-Match` precondition with single-statement compare-and-set
   (missing → 422, stale → 409), enforced under a transaction-per-request boundary.
 - JWT authentication (FR-001/FR-002): `POST /v1/auth/register` (Argon2id password hashing, default
-  `user` role, 201 with no password echoed, duplicate email -> 409) and `POST /v1/auth/login` (HS256
+  `user` role, 201 with no password echoed, duplicate email → 409) and `POST /v1/auth/login` (HS256
   access token with `sub`/`role`/`iat`/`exp`, 15-min TTL, generic timing-equalized 401, no user
   enumeration). Token verification runs in an `AuthMiddleware` that attaches the caller's principal;
   `get_current_user` resolves it to the live `users` row. Replaces the temporary `X-User-Id` dev stub.
 - JWT signing configured from the environment: `JWT_SECRET` (held as `SecretStr`, kept out of
-  repr/logs), `JWT_ALGORITHM` (default HS256), `JWT_EXPIRE_SECONDS`; the app fails closed if the 
+  repr/logs), `JWT_ALGORITHM` (default HS256), `JWT_EXPIRE_SECONDS`; the app fails closed if the
   signing key is unset rather than signing with an empty key.
 - RBAC enforcement (FR-003) in `AuthMiddleware` via a pure, unit-tested route policy
-  (`route_requirement` -> PUBLIC/AUTHENTICATED/ADMIN, `authorize`); 401 (authentication) is enforced 
+  (`route_requirement` → PUBLIC/AUTHENTICATED/ADMIN, `authorize`); 401 (authentication) is enforced
   before 403 (role), unknown routes default to authenticated, and per-resource ownership
   (author-or-admin) stays in the service layer with no 404 existence leak.
+- Registration input validation (FR-001): `RegisterIn` now enforces `EmailStr` format + case
+  normalization (≤ 254 chars) and the password policy — min 12 / max 128 chars plus breached-password
+  screening via a pluggable `BreachedPasswordChecker` (offline bundled blocklist by default; live
+  HIBP k-anonymity is a documented seam). Bad email / short / breached / oversized / missing fields →
+  `422` with field-level details. Adds the `email-validator` dependency.
 - Alembic migrations `0001`–`0004`: schema (roles/users/articles), role seeds, and the two composite
   list indexes (`idx_articles_deleted_created`, `idx_articles_author_deleted_created`).
 - Test harness and suite (acceptance/unit/integration) with an 80% coverage floor enforced via

@@ -13,8 +13,8 @@ in the [Glossary](glossary.md). All error responses use the canonical envelope i
 **Acceptance criteria:**
 - [x] Given valid, unique credentials, when a visitor registers, then an account is created with the default role `user` and a `201` is returned (the password is never echoed back).
 - [x] Given an identifier that is already registered, when registering, then the request is rejected (`409`) and no duplicate account is created.
-- [ ] Given malformed input (missing fields, bad email/username format, password failing the policy, or any field exceeding its **maximum length**), then `422` with field-level errors and no account is created.
-- [ ] **Password policy ([PRD §13 D6](product-requirements.md)):** minimum 12 characters; no mandatory composition or rotation rules; new passwords are screened against a known-breached-password list and rejected (`422`) on a match. _(Breached-list screening is a **local bundled blocklist** behind a pluggable interface; a live HIBP k-anonymity checker is a documented seam.)_
+- [x] Given malformed input (missing fields, bad email format, password failing the policy, or any field exceeding its **maximum length**, email ≤ 254, password ≤ 128), then `422` with field-level errors and no account is created.
+- [x] **Password policy ([PRD §13 D6](product-requirements.md)):** minimum 12 characters; no mandatory composition or rotation rules; new passwords are screened against a known-breached-password list and rejected (`422`) on a match. _(Breached-list screening is a **local bundled blocklist** behind a pluggable `BreachedPasswordChecker` interface; a live HIBP k-anonymity checker is a documented seam.)_
 - [x] Passwords are stored only as a salted hash (**Argon2id**) — never in plaintext, never returned, never logged.
 
 ## FR-002 — User Login (JWT)

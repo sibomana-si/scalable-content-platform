@@ -22,6 +22,8 @@ coverage==7.15.1
 cryptography==49.0.0
 cyclonedx-python-lib==11.11.0
 defusedxml==0.7.1
+dnspython==2.8.0
+email-validator==2.3.0
 fastapi==0.139.0
 filelock==3.29.7
 ghp-import==2.1.0

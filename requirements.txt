@@ -18,6 +18,7 @@ redis>=5.0                     # redis-py; async via redis.asyncio
 # --- Config / validation ---
 pydantic>=2.7                  # v2 request/response validation 
 pydantic-settings>=2.3         # 12-factor env config 
+email-validator>=2.1           # EmailStr validation for registration (pydantic[email])
 
 # --- Auth ---
 pyjwt>=2.8                     # JWT sign/verify, HS256/RS256
