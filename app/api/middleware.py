@@ -1,9 +1,18 @@
-"""Authentication + RBAC middleware.
+"""The middleware chain: request id → access log → authentication → RBAC.
 
-The single enforcement point for access control: it verifies the ``Authorization: Bearer``
-JWT when present, attaches the caller's principal (``{"id", "role"}``) to ``request.state``,
-then applies the route-based role policy. Per-resource ownership (author-or-admin on ``{id}``)
-stays in the service layer.
+Registration order in :func:`app.main.create_app` is reversed by Starlette, so the chain
+runs outside in as:
+
+``RequestIDMiddleware`` → ``AccessLogMiddleware`` → ``AuthMiddleware``
+
+The correlation id is minted at the outermost layer so every inner layer — including the
+``error_response`` envelopes built inside ``AuthMiddleware`` — can quote it. All layers share
+one ``request.state``, which is backed by the ASGI ``scope["state"]`` dict.
+
+Access control is the single enforcement point for authorization: it verifies the
+``Authorization: Bearer`` JWT when present, attaches the caller's principal
+(``{"id", "role"}``) to ``request.state``, then applies the route-based role policy.
+Per-resource ownership (author-or-admin on ``{id}``) stays in the service layer.
 
 The policy is split into two functions, :func:`route_requirement` (what a route needs) and
 :func:`authorize` (does this principal satisfy it), so the rules can be tested without HTTP.
@@ -14,16 +23,28 @@ canonical error envelope directly via :func:`error_response` rather than raising
 """
 
 from enum import Enum
+from time import perf_counter
+from typing import Any
 
+import structlog
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
 from starlette.responses import Response
 
 from app.api.errors import error_response
 from app.core.security import decode_access_token
+from app.observability.context import (
+    REQUEST_ID_HEADER,
+    principal_user_id,
+    route_template,
+    sanitize_request_id,
+)
+from app.observability.logging import get_logger
 from app.services.exceptions import UnauthenticatedError
 
 Principal = dict[str, str]
+
+logger = get_logger(__name__)
 
 
 class Requirement(Enum):
@@ -85,6 +106,68 @@ def extract_bearer_token(request: Request) -> str | None:
     return token.strip()
 
 
+class RequestIDMiddleware(BaseHTTPMiddleware):
+    """Outermost layer: establish the correlation id for logs, traces and error envelopes.
+
+    An inbound ``X-Request-ID`` (from a gateway or a client) is honoured when it is
+    well-formed and replaced otherwise — see :func:`sanitize_request_id`. The id is bound
+    into the structlog context, so every record emitted downstream carries it without the
+    call site having to pass it around.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        request_id = sanitize_request_id(request.headers.get(REQUEST_ID_HEADER))
+        request.state.request_id = request_id
+
+        # Clear first: the contextvars are inherited from whatever task spawned this one,
+        # so a stale binding from an earlier request must never survive into this record.
+        structlog.contextvars.clear_contextvars()
+        structlog.contextvars.bind_contextvars(request_id=request_id)
+
+        response = await call_next(request)
+        response.headers[REQUEST_ID_HEADER] = request_id
+        return response
+
+
+class AccessLogMiddleware(BaseHTTPMiddleware):
+    """Emit exactly one structured access-log record per request.
+
+    The route label is read after the downstream app has run, because the router only sets
+    ``scope["route"]`` once it has matched — that is what makes the field the templated path
+    (``/v1/articles/{article_id}``) instead of a high-cardinality concrete URL.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        started = perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            # Log-and-re-raise: the 500 envelope is still built by the app's exception
+            # handler, but the traceback would otherwise be lost to the operator.
+            logger.exception("http.request", **self._fields(request, 500, started))
+            raise
+
+        fields = self._fields(request, response.status_code, started)
+        if response.status_code >= 500:
+            logger.error("http.request", **fields)
+        elif response.status_code >= 400:
+            logger.warning("http.request", **fields)
+        else:
+            logger.info("http.request", **fields)
+        return response
+
+    @staticmethod
+    def _fields(request: Request, status: int, started: float) -> dict[str, Any]:
+        # `request_id` is merged in from the structlog context bound by RequestIDMiddleware.
+        return {
+            "user_id": principal_user_id(request.state),
+            "route": route_template(request.scope),
+            "method": request.method,
+            "status": status,
+            "latency_ms": round((perf_counter() - started) * 1000, 3),
+        }
+
+
 class AuthMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         request.state.principal = None
@@ -94,11 +177,21 @@ class AuthMiddleware(BaseHTTPMiddleware):
                 claims = decode_access_token(token)
             except UnauthenticatedError:
                 # A supplied-but-invalid token is always a hard 401, on any route.
+                logger.warning("auth.failed", reason="invalid_token", path=request.url.path)
                 return error_response(request, 401, "UNAUTHENTICATED", "Invalid or expired token.")
             request.state.principal = {"id": claims["sub"], "role": claims["role"]}
 
         requirement = route_requirement(request.method, request.url.path)
         denial = authorize(requirement, request.state.principal)
         if denial is not None:
+            status, code, _ = denial
+            logger.warning(
+                "auth.denied",
+                status=status,
+                code=code,
+                requirement=requirement.value,
+                user_id=principal_user_id(request.state),
+                path=request.url.path,
+            )
             return error_response(request, *denial)
         return await call_next(request)

@@ -63,6 +63,18 @@ Reads are public per FR-005 — anonymous clients can list and fetch live articl
 earlier draft of this table wrongly required `user` auth on reads). "user" auth means a valid 
 `Authorization: Bearer` JWT (see Authentication Flow).
 
+## Request Correlation
+
+Every response carries an `X-Request-ID` header, and the same value appears in the
+`error.request_id` field of any error envelope and in the server's log line for that request.
+Quote it when reporting a problem — it is the join key across logs, metrics exemplars and traces
+([observability-guide](../observability/observability-guide.md)).
+
+| Header | Direction | Notes |
+|---|---|---|
+| `X-Request-ID` | request (optional) | Supply your own id to correlate across a call chain. Accepted when it matches `[A-Za-z0-9._-]{1,64}`; anything else is silently replaced with a generated id. |
+| `X-Request-ID` | response | Always present on normal responses (echoed or generated). On an unhandled `500` the header may be absent, but `error.request_id` in the body is still the correlating value. |
+
 **Optimistic concurrency (writes):** `PUT`/`DELETE` require
 `If-Match: <updated_at as returned in the article JSON>` (ISO-8601 with microseconds;
 quotes tolerated). Missing → `422`; token no longer current → `409 CONFLICT` (re-fetch

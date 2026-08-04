@@ -32,6 +32,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   screening via a pluggable `BreachedPasswordChecker` (offline bundled blocklist by default; live
   HIBP k-anonymity is a documented seam). Bad email / short / breached / oversized / missing fields →
   `422` with field-level details. Adds the `email-validator` dependency.
+- Structured JSON logging (structlog): one access-log line per request on stdout carrying the
+  documented fields (`timestamp`, `level`, `message`, `request_id`, `user_id`, `route`,
+  `latency_ms`, `status`, `method`), with `route` as the templated path and unmatched requests
+  collapsed to a cardinality-safe constant. A `redact_secrets` processor censors secret-bearing
+  keys at any depth, and failed/denied authentication is audited (`auth.failed`/`auth.denied`)
+  without ever logging the rejected token. `LOG_FORMAT=console` selects a human-readable
+  renderer for local development.
+- Request correlation: `RequestIDMiddleware` accepts a well-formed inbound `X-Request-ID`
+  (rejecting anything that could forge a log line), otherwise mints one; the id is bound into
+  the log context, echoed in the `X-Request-ID` response header, and is the value the canonical
+  error envelope's `request_id` now reports — including for 401s rejected in middleware.
 - Alembic migrations `0001`–`0004`: schema (roles/users/articles), role seeds, and the two composite
   list indexes (`idx_articles_deleted_created`, `idx_articles_author_deleted_created`).
 - Test harness and suite (acceptance/unit/integration) with an 80% coverage floor enforced via

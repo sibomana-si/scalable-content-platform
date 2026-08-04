@@ -14,6 +14,7 @@ class Settings(BaseSettings):
     app_env: str = "dev"
     app_port: int = 8000
     log_level: str = "INFO"
+    log_format: str = "json"  # "json" for shipping, "console" for human-readable local dev
 
     # --- MySQL ---
     mysql_host: str = "localhost"
