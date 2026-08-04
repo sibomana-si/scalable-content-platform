@@ -8,7 +8,8 @@ Every environment variable: name, purpose, default, required. Mirror in `.env.ex
 |---|---|---|---|
 | `APP_ENV` | Environment (`dev`/`prod`) | `dev` | No |
 | `APP_PORT` | HTTP listen port | `8000` | No |
-| `LOG_LEVEL` | Logging verbosity | `INFO` | No |
+| `LOG_LEVEL` | Logging verbosity (`DEBUG`/`INFO`/`WARNING`/`ERROR`); an unrecognised value falls back to `INFO` | `INFO` | No |
+| `LOG_FORMAT` | Log renderer: `json` (shipped) or `console` (human-readable, local dev only) | `json` | No |
 | `MYSQL_HOST` | DB host | — | Yes |
 | `MYSQL_PORT` | DB port | `3306` | No |
 | `MYSQL_DB` | Database name | — | Yes |
