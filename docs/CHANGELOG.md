@@ -43,6 +43,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (rejecting anything that could forge a log line), otherwise mints one; the id is bound into
   the log context, echoed in the `X-Request-ID` response header, and is the value the canonical
   error envelope's `request_id` now reports — including for 401s rejected in middleware.
+- Prometheus RED metrics and an unauthenticated `GET /metrics` scrape endpoint:
+  `http_requests_total{route,method,status}`, `http_request_duration_seconds{route,method}`
+  (buckets placed on the 200 ms / 450 ms SLO edges so `histogram_quantile` can actually answer
+  the SLO), and `db_query_duration_seconds{query}` fed by SQLAlchemy cursor events. Label
+  cardinality is bounded by construction — `route` is the templated path (resolved from the
+  routing table even when a middleware short-circuits, so 401/403s are attributed to the
+  endpoint they targeted), `query` is the leading SQL verb from a closed set — and requests
+  that raise are counted as `500` before the exception propagates. `/metrics` excludes itself.
 - Alembic migrations `0001`–`0004`: schema (roles/users/articles), role seeds, and the two composite
   list indexes (`idx_articles_deleted_created`, `idx_articles_author_deleted_created`).
 - Test harness and suite (acceptance/unit/integration) with an 80% coverage floor enforced via

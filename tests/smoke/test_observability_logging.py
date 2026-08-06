@@ -161,7 +161,12 @@ async def test_error_envelope_carries_the_same_request_id_as_the_log(
 
     assert response.status_code == 401
     assert response.json()["error"]["request_id"] == "envelope-1"
-    assert access_logs(logs)[0]["request_id"] == "envelope-1"
+
+    entry = access_logs(logs)[0]
+    assert entry["request_id"] == "envelope-1"
+    # The router never ran, so scope["route"] is unset; the label still has to name the
+    # endpoint that was probed, otherwise every denial disappears into `__unmatched__`.
+    assert entry["route"] == "/v1/articles"
 
 
 async def test_failed_authentication_is_audited(client: AsyncClient, logs: io.StringIO) -> None:

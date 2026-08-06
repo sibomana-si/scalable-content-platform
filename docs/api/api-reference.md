@@ -58,6 +58,11 @@ duplicates or skips rows even as new articles are created ahead of the cursor.
 | DELETE | `/v1/articles/{id}` | owner/admin | Soft delete; requires `If-Match`         |
 | POST | `/v1/auth/register` | public      | Register -> `201 {id, email, role}`      |
 | POST | `/v1/auth/login` | public      | Login -> `200 {access_token, token_type}` |
+| GET | `/metrics` | **public** | Prometheus exposition (operations, not part of the `/v1` API) |
+
+`/metrics` is unversioned and excluded from the OpenAPI schema: it is a scrape target for
+Prometheus, protected at the network layer rather than by a token (ADR-0009), and must not be
+exposed through the public gateway.
 
 Reads are public per FR-005 — anonymous clients can list and fetch live articles (an
 earlier draft of this table wrongly required `user` auth on reads). "user" auth means a valid 

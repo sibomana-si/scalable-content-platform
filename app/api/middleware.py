@@ -3,7 +3,7 @@
 Registration order in :func:`app.main.create_app` is reversed by Starlette, so the chain
 runs outside in as:
 
-``RequestIDMiddleware`` → ``AccessLogMiddleware`` → ``AuthMiddleware``
+``RequestIDMiddleware`` → ``AccessLogMiddleware`` → ``MetricsMiddleware`` → ``AuthMiddleware``
 
 The correlation id is minted at the outermost layer so every inner layer — including the
 ``error_response`` envelopes built inside ``AuthMiddleware`` — can quote it. All layers share
@@ -40,6 +40,7 @@ from app.observability.context import (
     sanitize_request_id,
 )
 from app.observability.logging import get_logger
+from app.observability.metrics import METRICS_PATH, observe_request, route_label
 from app.services.exceptions import UnauthenticatedError
 
 Principal = dict[str, str]
@@ -56,8 +57,9 @@ class Requirement(Enum):
 
 
 # Prefixes that are reachable without a token. Auth endpoints and the API docs are public;
-# health probes must answer before/without auth.
-_PUBLIC_PREFIXES = ("/health", "/docs", "/redoc", "/openapi.json", "/v1/auth")
+# health probes must answer before/without auth; Prometheus scrapes /metrics with no
+# credentials and is kept off the public gateway instead.
+_PUBLIC_PREFIXES = ("/health", "/docs", "/redoc", "/openapi.json", "/v1/auth", METRICS_PATH)
 _ADMIN_PREFIX = "/v1/admin"
 _ARTICLES_PREFIX = "/v1/articles"
 
@@ -166,6 +168,37 @@ class AccessLogMiddleware(BaseHTTPMiddleware):
             "status": status,
             "latency_ms": round((perf_counter() - started) * 1000, 3),
         }
+
+
+class MetricsMiddleware(BaseHTTPMiddleware):
+    """RED instrumentation: one counter increment and one latency observation per request.
+
+    Sits below the access log and above authentication, so requests rejected by the auth
+    policy still count towards the error rate — a spike of 401s is exactly the kind of thing
+    the dashboard has to show.
+    """
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        started = perf_counter()
+        try:
+            response = await call_next(request)
+        except Exception:
+            # An unhandled error becomes a 500 further out; count it as one before re-raising,
+            # or the error-rate SLI would silently under-report the worst failures.
+            self._observe(request, 500, started)
+            raise
+
+        self._observe(request, response.status_code, started)
+        return response
+
+    @staticmethod
+    def _observe(request: Request, status: int, started: float) -> None:
+        route = route_label(request.scope)
+        if route == METRICS_PATH:
+            # Scraping is not traffic; self-instrumentation would make the scrape interval
+            # show up as a request rate.
+            return
+        observe_request(route, request.method, status, perf_counter() - started)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

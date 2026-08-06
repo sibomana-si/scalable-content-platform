@@ -6,7 +6,9 @@ caller forge log records.
 """
 
 import pytest
+from starlette.applications import Starlette
 from starlette.datastructures import State
+from starlette.routing import Route
 
 from app.observability.context import (
     UNMATCHED_ROUTE,
@@ -103,3 +105,57 @@ def test_returns_the_templated_path_not_the_concrete_url() -> None:
 def test_collapses_unmatched_requests_to_a_single_constant(scope: dict) -> None:
     # Cardinality guard: unmatched paths are caller-controlled and must never become labels.
     assert route_template(scope) == UNMATCHED_ROUTE
+
+
+# When a middleware short-circuits (401/403), the router never runs and never sets
+# scope["route"], so the label falls back to matching the routing table directly.
+
+
+def _scope(app: Starlette, path: str, method: str = "GET") -> dict:
+    return {"type": "http", "app": app, "path": path, "method": method, "headers": []}
+
+
+@pytest.fixture
+def routed_app() -> Starlette:
+    async def endpoint(request):  # pragma: no cover - never invoked, only matched
+        raise AssertionError
+
+    return Starlette(
+        routes=[
+            Route("/v1/articles", endpoint, methods=["GET", "POST"]),
+            Route("/v1/articles/{article_id}", endpoint, methods=["PUT"]),
+        ]
+    )
+
+
+def test_resolves_the_route_from_the_routing_table_when_dispatch_never_happened(
+    routed_app: Starlette,
+) -> None:
+    scope = _scope(routed_app, "/v1/articles", "POST")
+
+    assert route_template(scope) == "/v1/articles"
+
+
+def test_resolves_templated_routes_without_dispatch(routed_app: Starlette) -> None:
+    scope = _scope(routed_app, "/v1/articles/42", "PUT")
+
+    assert route_template(scope) == "/v1/articles/{article_id}"
+
+
+def test_a_wrong_method_still_attributes_the_request_to_its_endpoint(
+    routed_app: Starlette,
+) -> None:
+    # Partial match: right path, unsupported method (405).
+    assert route_template(_scope(routed_app, "/v1/articles/42", "DELETE")) == (
+        "/v1/articles/{article_id}"
+    )
+
+
+def test_paths_that_match_nothing_stay_collapsed(routed_app: Starlette) -> None:
+    assert route_template(_scope(routed_app, "/v1/scanner-probe")) == UNMATCHED_ROUTE
+
+
+def test_a_dispatched_route_wins_over_the_routing_table(routed_app: Starlette) -> None:
+    scope = _scope(routed_app, "/v1/articles", "POST") | {"route": _Route("/dispatched")}
+
+    assert route_template(scope) == "/dispatched"
