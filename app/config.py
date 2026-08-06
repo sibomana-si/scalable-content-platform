@@ -34,7 +34,9 @@ class Settings(BaseSettings):
     jwt_expire_seconds: int = 900
 
     # --- Observability ---
+    # Empty endpoint = tracing off: no provider, no exporter, no outbound connection attempts.
     otel_exporter_otlp_endpoint: str = ""
+    otel_service_name: str = "scalable-content-platform"
 
     def require_signing_key(self) -> str:
         """Return the JWT signing key, or fail loudly if it is unset.

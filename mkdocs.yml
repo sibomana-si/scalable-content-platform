@@ -63,6 +63,7 @@ nav:
           - "0006 Test-driven development": architecture/adr/0006-test-driven-development.md
           - "0007 Single role FK": architecture/adr/0007-single-role-fk.md
           - "0008 Alembic migrations": architecture/adr/0008-alembic-migrations.md
+          - "0009 Observability stack": architecture/adr/0009-observability-stack.md
           - Template: architecture/adr/template.md
   - API:
       - OpenAPI: api/openapi.md

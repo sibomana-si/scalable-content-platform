@@ -51,6 +51,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   routing table even when a middleware short-circuits, so 401/403s are attributed to the
   endpoint they targeted), `query` is the leading SQL verb from a closed set — and requests
   that raise are counted as `500` before the exception propagates. `/metrics` excludes itself.
+- OpenTelemetry tracing: FastAPI/SQLAlchemy/redis auto-instrumentation plus `<component>.<operation>`
+  domain spans (`articles.*`, `auth.*`) around the service layer, yielding one trace per request
+  from the HTTP server span through the domain span down to the SQL statement span. `request_id`
+  is attached to spans and the span's `trace_id` is bound into the log context, joining logs and
+  traces in both directions. Tracing is **off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set** and
+  exports asynchronously when on, so a missing or slow collector never affects a request; adds
+  `OTEL_SERVICE_NAME`.
+- ADR-0009 records the observability stack: structlog + prometheus-client + OpenTelemetry,
+  correlation by `request_id`, pull-based metrics vs. push-based traces, and why two span-naming
+  conventions coexist.
 - Alembic migrations `0001`–`0004`: schema (roles/users/articles), role seeds, and the two composite
   list indexes (`idx_articles_deleted_created`, `idx_articles_author_deleted_created`).
 - Test harness and suite (acceptance/unit/integration) with an 80% coverage floor enforced via
