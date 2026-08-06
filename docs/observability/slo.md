@@ -4,11 +4,19 @@
 
 
 ## Service Level Indicators (SLIs)
-| SLI | Definition | Source metric |
-|---|---|---|
-| Latency | % of read requests served < 200ms | `http_request_duration_seconds` |
-| Availability | % of requests not 5xx | `http_requests_total` |
-| Error rate | 5xx / total | `http_requests_total` |
+| SLI | Definition | Source metric | PromQL |
+|---|---|---|---|
+| Latency | % of read requests served < 200ms | `http_request_duration_seconds` | `histogram_quantile(0.95, sum by (le) (rate(http_request_duration_seconds_bucket{method="GET"}[5m])))` |
+| Availability | % of requests not 5xx | `http_requests_total` | `1 - (sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m])))` |
+| Error rate | 5xx / total | `http_requests_total` | `sum(rate(http_requests_total{status=~"5.."}[5m])) / sum(rate(http_requests_total[5m]))` |
+
+The metrics are shipped (M4) — see [observability-guide § Metrics](observability-guide.md#metrics-prometheus).
+Two implementation details the queries above depend on:
+
+- **`status` is the code as a string**, so `status=~"5.."` selects server errors exactly.
+- The latency histogram has **bucket boundaries at 0.2 s and 0.45 s**. `histogram_quantile`
+  interpolates linearly *inside* a bucket, so a P95/P99 reading is only trustworthy when the
+  target sits on a bucket edge; those two edges exist precisely because these are the targets.
 
 ## Service Level Objectives (SLOs)
 | SLO | Target | Window |

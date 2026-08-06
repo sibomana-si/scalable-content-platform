@@ -16,16 +16,20 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import get_settings
+from app.observability.metrics import attach_query_metrics
 
 
 @lru_cache
 def get_engine() -> AsyncEngine:
     settings = get_settings()
-    return create_async_engine(
+    engine = create_async_engine(
         settings.async_database_url,
         pool_size=settings.db_pool_size,
         pool_pre_ping=True,
     )
+    # DBAPI-level cursor events live on the sync engine underneath the async facade.
+    attach_query_metrics(engine.sync_engine)
+    return engine
 
 
 @lru_cache

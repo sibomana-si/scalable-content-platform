@@ -25,6 +25,11 @@ class TestRouteRequirement:
         assert route_requirement("GET", "/docs") is Requirement.PUBLIC
         assert route_requirement("GET", "/openapi.json") is Requirement.PUBLIC
 
+    def test_metrics_scrape_endpoint_is_public(self):
+        # Prometheus scrapes without credentials; /metrics is protected at the network layer
+        # Without an explicit allowlist entry the secure default would 401 it.
+        assert route_requirement("GET", "/metrics") is Requirement.PUBLIC
+
     def test_admin_prefix_requires_admin(self):
         assert route_requirement("POST", "/v1/admin/roles") is Requirement.ADMIN
 

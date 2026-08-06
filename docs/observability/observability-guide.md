@@ -44,16 +44,51 @@ Because it is established *outside* authentication, even a `401` rejected at the
 layer is correlatable.
 
 ## Metrics (Prometheus)
+
+> **Shipped** (M4) — `app/observability/metrics.py` + `MetricsMiddleware`, except the cache
+> counters, which land with Redis cache-aside in M5.
+
 Follow the **RED** method for the API and **USE** for resources.
 
-| Metric | Type | Labels | Notes |
-|---|---|---|---|
-| `http_requests_total` | counter | `route`, `method`, `status` | Rate & errors |
-| `http_request_duration_seconds` | histogram | `route`, `method` | P50/P95 latency |
-| `cache_hits_total` / `cache_misses_total` | counter | `entity` | Hit ratio |
-| `db_query_duration_seconds` | histogram | `query` | DB bottlenecks |
+| Metric | Type | Labels | Notes | Status |
+|---|---|---|---|---|
+| `http_requests_total` | counter | `route`, `method`, `status` | Rate & errors | ✅ M4 |
+| `http_request_duration_seconds` | histogram | `route`, `method` | P50/P95 latency | ✅ M4 |
+| `cache_hits_total` / `cache_misses_total` | counter | `entity` | Hit ratio | ⏳ M5 |
+| `db_query_duration_seconds` | histogram | `query` | DB bottlenecks | ✅ M4 |
 
-- Exposed at `GET /metrics`.
+- Exposed at `GET /metrics`, unauthenticated (ADR-0009). The endpoint excludes itself from
+  `http_requests_total`, so the scrape interval does not masquerade as traffic.
+
+### Cardinality guards
+
+Prometheus keeps one time series per label combination, so a caller-controlled label value is
+an unbounded-memory hole in the scrape target. Every label here comes from a closed set:
+
+- **`route`** is the router's **templated** path (`/v1/articles/{article_id}`), never the
+  concrete URL. Requests that matched no route collapse to `__unmatched__` — a scanner walking
+  random paths adds no series. When a middleware short-circuits (a 401/403 never reaches the
+  router) the routing table is consulted directly, so denials are still attributed to the
+  endpoint that was probed instead of vanishing into `__unmatched__`.
+- **`query`** is the statement's leading SQL verb — `select`, `insert`, `update`, `delete` or
+  `other` — parsed past comments and whitespace, with CTEs bucketed as `select`. Raw SQL as a
+  label would be both unbounded *and* a way to leak literals into the exposition.
+- **`status`** is the HTTP code as a string, which is what makes `status=~"5.."` work in the
+  error-rate SLI.
+
+### Histogram buckets
+
+`http_request_duration_seconds` uses boundaries at 5 ms … 10 s including **0.2 s and 0.45 s**;
+`histogram_quantile` interpolates within a bucket, so the P95 < 200 ms / P99 < 450 ms SLOs are
+only measurable because those exact edges exist ([slo.md](slo.md)).
+`db_query_duration_seconds` runs an order of magnitude finer (1 ms … 2.5 s).
+
+### Failure counting
+
+`MetricsMiddleware` sits below the access log and above authentication, and counts a request
+even when it raises: an unhandled exception is recorded as a `500` before being re-raised for
+the error handler. Otherwise the error-rate SLI would under-report exactly the failures that
+matter most.
 
 ## Tracing (OpenTelemetry)
 - End-to-end request traces with DB and cache spans.
