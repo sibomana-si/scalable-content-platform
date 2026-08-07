@@ -10,6 +10,7 @@ from app.api.middleware import (
 )
 from app.api.routers import articles, auth, health, metrics
 from app.observability.logging import configure_logging
+from app.observability.tracing import configure_tracing
 
 # Configure logging at import, not in a lifespan hook: app construction itself should be
 # logged in the production format, and the ASGI test harness never runs lifespan events.
@@ -30,6 +31,9 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router)
     app.include_router(auth.router)
     app.include_router(articles.router)
+    # Last, so the OTel server span wraps every layer above and the request-id middleware can
+    # annotate it. A no-op unless OTEL_EXPORTER_OTLP_ENDPOINT is configured.
+    configure_tracing(app)
     return app
 
 

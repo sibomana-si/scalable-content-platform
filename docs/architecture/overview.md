@@ -150,7 +150,7 @@ graph TD
 | MySQL as the single source of truth | Correctness under cache loss; transactional writes | [ADR-0003](adr/0003-mysql-source-of-truth.md) |
 | Redis cache-aside on hot reads + load shedding | Read P95 < 200 ms (G1); DB shielded at ≥ 90% hit ratio | [ADR-0004](adr/0004-redis-cache-aside.md) |
 | Stateless JWT (15-min TTL) + RBAC middleware | Secure boundaries (G2) without a session store | [ADR-0005](adr/0005-stateless-jwt-auth.md) |
-| Prometheus/Grafana + OpenTelemetry, correlated by `request_id` | Production debuggability (G5) | [observability-guide](../observability/observability-guide.md) |
+| Prometheus/Grafana + OpenTelemetry, correlated by `request_id` | Production debuggability (G5) | [ADR-0009](adr/0009-observability-stack.md) |
 | Timeouts, retries with backoff, circuit breakers, graceful fallback | Availability under partial failure (G3) | [fault-tolerance-design](../resilience/fault-tolerance-design.md) |
 
 The cross-cutting trade-offs behind these choices — what each one costs and what was rejected — are
@@ -191,7 +191,8 @@ budgets are defined in [fault-tolerance-design.md](../resilience/fault-tolerance
   [operations/configuration-reference.md](../operations/configuration-reference.md),
   [security/secrets-management.md](../security/secrets-management.md)
 - **Observability** — JSON logs, RED metrics (P50/P95/P99), OTEL traces with DB/cache spans, all
-  correlated by `request_id` → [observability/observability-guide.md](../observability/observability-guide.md)
+  correlated by `request_id` → [ADR-0009](adr/0009-observability-stack.md),
+  [observability/observability-guide.md](../observability/observability-guide.md)
 - **Resilience** — timeout/retry/circuit-breaker policy and fallback behavior per dependency →
   [resilience/fault-tolerance-design.md](../resilience/fault-tolerance-design.md)
 - **Security** — JWT + RBAC, input validation, OWASP API Top 10 coverage →
@@ -209,4 +210,5 @@ budgets are defined in [fault-tolerance-design.md](../resilience/fault-tolerance
 - ADRs: [0001](adr/0001-record-architecture-decisions.md) · [0002](adr/0002-modular-monolith.md) ·
   [0003](adr/0003-mysql-source-of-truth.md) · [0004](adr/0004-redis-cache-aside.md) ·
   [0005](adr/0005-stateless-jwt-auth.md) · [0006](adr/0006-test-driven-development.md) ·
-  [0007](adr/0007-single-role-fk.md) · [0008](adr/0008-alembic-migrations.md)
+  [0007](adr/0007-single-role-fk.md) · [0008](adr/0008-alembic-migrations.md) ·
+  [0009](adr/0009-observability-stack.md)

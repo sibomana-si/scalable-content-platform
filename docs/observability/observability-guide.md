@@ -91,9 +91,43 @@ the error handler. Otherwise the error-rate SLI would under-report exactly the f
 matter most.
 
 ## Tracing (OpenTelemetry)
-- End-to-end request traces with DB and cache spans.
-- **Span naming:** `<component>.<operation>` (e.g. `articles.get`, `redis.get`, `mysql.select`).
-- Propagate context; attach `request_id` to spans.
+
+> **Shipped** (M4) — `app/observability/tracing.py`. Decision recorded in
+> [ADR-0009](../architecture/adr/0009-observability-stack.md).
+
+- End-to-end request traces with DB and cache spans: HTTP server span → domain span →
+  SQLAlchemy statement span, in one trace.
+- **Off unless `OTEL_EXPORTER_OTLP_ENDPOINT` is set.** No endpoint means no provider, no
+  exporter, and no outbound connection attempt — which is also what keeps CI offline. When
+  enabled, spans leave asynchronously through a `BatchSpanProcessor`, so a slow or dead
+  collector never enters the request path.
+- `request_id` is attached to the server span and to every domain span, and the span's
+  `trace_id` is bound into the log context — so a log line names its trace and a trace names
+  its logs.
+- `service.name` comes from `OTEL_SERVICE_NAME`; without it a shared collector files
+  everything under `unknown_service`.
+
+### Span naming: two layers, on purpose
+
+An earlier draft of this guide specified `<component>.<operation>` for *everything*. In
+practice the auto-instrumentation's names are worth keeping, so both conventions coexist:
+
+| Layer | Source | Names | Why |
+|---|---|---|---|
+| Transport / infrastructure | auto-instrumentation (FastAPI, SQLAlchemy, redis) | OTel **semantic conventions** — `GET /v1/articles/{article_id}`, `SELECT`, Redis command spans | Every OTel-aware backend already knows how to read these, and they carry the DB/cache attributes (`db.system`, `db.statement`, `http.route`) the NFR asks for |
+| Domain | `traced()` in the service layer | **`<component>.<operation>`** — `articles.get`, `articles.list`, `auth.login` | A trace should read as what the system was doing, not only which library it was in |
+
+Renaming the auto-instrumented spans to fit one convention would mean discarding the
+attributes backends key off, so the guide was reconciled to the code instead.
+
+### Safety properties
+
+- **Telemetry never changes behaviour.** `traced()` re-raises everything; with no provider it
+  resolves to a no-op tracer and the wrapped body simply runs. Existing service unit tests
+  pass unchanged, which is the regression check on that claim.
+- **No credentials or PII on spans.** `auth.register`/`auth.login` carry no email or password
+  attributes, and `db.statement` keeps bound parameters as placeholders, so a trace backend
+  never accumulates row data.
 
 ## What this enables
 - Debugging slow endpoints, identifying DB bottlenecks, root-cause analysis.

@@ -41,6 +41,7 @@ from app.observability.context import (
 )
 from app.observability.logging import get_logger
 from app.observability.metrics import METRICS_PATH, observe_request, route_label
+from app.observability.tracing import annotate_current_span
 from app.services.exceptions import UnauthenticatedError
 
 Principal = dict[str, str]
@@ -125,6 +126,12 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         # so a stale binding from an earlier request must never survive into this record.
         structlog.contextvars.clear_contextvars()
         structlog.contextvars.bind_contextvars(request_id=request_id)
+
+        # Closes the logs<->traces loop in both directions. `None` whenever tracing is off,
+        # which is the default; the key is then simply absent from the log line.
+        trace_id = annotate_current_span(request_id)
+        if trace_id is not None:
+            structlog.contextvars.bind_contextvars(trace_id=trace_id)
 
         response = await call_next(request)
         response.headers[REQUEST_ID_HEADER] = request_id
