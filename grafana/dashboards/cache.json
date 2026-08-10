@@ -1,0 +1,22 @@
+{
+  "uid": "scp-cache",
+  "title": "Cache (Redis)",
+  "description": "PENDING — placeholder until Redis cache-aside ships in M5. The backing metrics (cache_hits_total / cache_misses_total) have no call sites yet, so this dashboard is deliberately empty rather than showing panels that would read 'No data' forever.",
+  "tags": ["scalable-content-platform", "cache", "pending"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Pending — lands with Redis cache-aside (M5)",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Pending (M5)\n\nThis dashboard is provisioned but intentionally has no query panels yet.\n\n`cache_hits_total` and `cache_misses_total` are specified in the [observability guide](../observability/observability-guide.md) and reserved in [ADR-0009](../architecture/adr/0009-observability-stack.md), but the application does not emit them: there are no call sites until the cache-aside read path lands in **M5** ([ADR-0004](../architecture/adr/0004-redis-cache-aside.md)).\n\nA panel querying a metric nobody exports renders `No data` indefinitely and is indistinguishable from an outage, so the panels are added together with the instrumentation.\n\n**Planned panels**\n\n| Panel | Query | Target |\n|---|---|---|\n| Hit ratio | `rate(cache_hits_total[5m]) / (rate(cache_hits_total[5m]) + rate(cache_misses_total[5m]))` | >= 90% |\n| Hits vs. misses by entity | `sum by (entity) (rate(cache_hits_total[5m]))` | — |\n| Redis command latency | redis client spans / instrumentation | — |\n| Fallback-to-DB rate | miss rate during a Redis outage | graceful degradation |\n"
+      }
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 # Testing Strategy & TDD Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-18
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-10
 
 How this project writes tests — and, more importantly, **when**: tests are written *before* the code
 they verify. This document is the practical companion to two requirements that already exist:
@@ -71,6 +71,15 @@ there is one set of tests, not a "CI suite" and a "local suite."
   pagination — anything an FR acceptance criterion or PRD decision describes.
 - **Verified, not TDD'd:** observability wiring (log fields, metric names, span presence) and infra
   glue are covered by integration/smoke assertions after wiring, since their "spec" is configuration.
+  **M4 went further than this minimum, deliberately.** Wiring is still only verified, but every
+  *decision* inside the observability layer was extracted into a pure function and driven
+  red-green first: log redaction, request-id sanitising, route labelling, SQL-verb bucketing,
+  tracing enablement, and the `traced()` no-op-without-a-provider contract. The rule of thumb this
+  established: if a bug in it would be silent in production, it is a decision, not configuration,
+  and it gets a unit test. Dashboards and alert rules remain configuration, but
+  `tests/unit/test_dashboards.py` checks their PromQL against the metric names the app actually
+  registers — the drift it guards against ("No data" panels, alerts that can never fire) is
+  exactly the silent kind.
 - **Validation, not TDD:** load tests (M6, [load-test-plan](../performance/load-test-plan.md)) and
   fault-injection/chaos runs (M7, [chaos-test-report](../resilience/chaos-test-report.md)) measure
   the running system against NFR targets; they are reports, not red-green loops.

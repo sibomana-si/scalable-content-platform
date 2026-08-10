@@ -1,6 +1,6 @@
 # SLI / SLO / Error Budget
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-09
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-10
 
 
 ## Service Level Indicators (SLIs)
@@ -30,3 +30,20 @@ Targets are the requirements set in [non-functional-requirements.md](../requirem
 ## Error Budget
 - Budget = `100% − SLO`. At 99.9% that is **0.1% → ~43 min/month**. The availability SLO and the "< 0.1% 5xx" error rate are the **same budget** expressed two ways.
 - **Policy:** while the rolling-window budget remains, releases proceed normally. If the budget is exhausted, freeze risky changes (P0 fixes / security only) until back within SLO. If a single incident burns > 20% of the budget, run a postmortem. (Per the [Google SRE error-budget policy](https://sre.google/workbook/error-budget-policy/).)
+
+### Burn-rate alerting
+
+Alerting on the budget directly ("< 43 min left") is too late to act on, so the shipped rules
+alert on **burn rate** — how fast the budget is being spent relative to a uniform month. Each uses
+a **long window to confirm the burn and a short one to make the alert resolve promptly**; without
+the short window an alert keeps firing long after the incident has stopped (Google SRE workbook,
+multi-window multi-burn-rate).
+
+| Alert | Burn rate | Long window | Short window | Budget spent | Severity |
+|---|---|---|---|---|---|
+| `ErrorBudgetBurnFast` | 14.4× | 1h | 5m | 2% per hour | **critical** — page |
+| `ErrorBudgetBurnSlow` | 6× | 6h | 30m | 10% per 6h | warning — ticket |
+
+Rules in `prometheus/alerts.yml`, procedures in
+[alerting-runbooks.md](alerting-runbooks.md#alert-errorbudgetburnfast). Note that both are ratios,
+so they are blind at zero traffic — `NoTrafficReceived` covers that gap.

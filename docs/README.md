@@ -38,13 +38,13 @@ Documentation for the **Scalable Content Platform Backend**.
 ## Observability
 - [Observability Guide](observability/observability-guide.md) — 🟩
 - [SLI/SLO/Error Budget](observability/slo.md) — 🟩
-- [Dashboards Catalog](observability/dashboards.md) — 🟨
-- [Alerting Runbooks](observability/alerting-runbooks.md) — 🟨
+- [Dashboards Catalog](observability/dashboards.md) — 🟩
+- [Alerting Runbooks](observability/alerting-runbooks.md) — 🟩
 
 ## Operations
 - [Deployment Guide](operations/deployment.md) — 🟨
 - [Runbook / Operations Manual](operations/runbook.md) — 🟨
-- [Configuration Reference](operations/configuration-reference.md) — 🟨
+- [Configuration Reference](operations/configuration-reference.md) — 🟩
 
 ## Performance
 - [Load Test Plan](performance/load-test-plan.md) — 🟨
