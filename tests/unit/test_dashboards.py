@@ -15,7 +15,7 @@ import pytest
 import yaml  # type: ignore[import-untyped]
 from prometheus_client import REGISTRY
 
-import app.observability.metrics  # noqa: F401(registers the collectors on import)
+import app.observability.metrics  # noqa: F401  (registers the collectors on import)
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 DASHBOARD_DIR = REPO_ROOT / "grafana" / "dashboards"
