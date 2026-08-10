@@ -1,0 +1,22 @@
+{
+  "uid": "scp-resilience",
+  "title": "Resilience",
+  "description": "PENDING — placeholder until the resilience patterns ship in M7. Timeout, retry and circuit-breaker metrics have no emitters yet, so this dashboard is deliberately empty rather than showing panels that would read 'No data' forever.",
+  "tags": ["scalable-content-platform", "resilience", "pending"],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "time": { "from": "now-6h", "to": "now" },
+  "panels": [
+    {
+      "id": 1,
+      "type": "text",
+      "title": "Pending — lands with the resilience patterns (M7)",
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 0 },
+      "options": {
+        "mode": "markdown",
+        "content": "## Pending (M7)\n\nThis dashboard is provisioned but intentionally has no query panels yet.\n\nTimeouts, retries with backoff and circuit breakers are designed in [fault-tolerance-design](../resilience/fault-tolerance-design.md) and validated by the chaos tests in **M7**. Until those code paths exist there is nothing to count, and a panel querying a metric nobody exports renders `No data` indefinitely — indistinguishable from an outage.\n\n**Planned panels**\n\n| Panel | Signal | Why |\n|---|---|---|\n| Circuit-breaker state by dependency | breaker open/half-open/closed | Shows *why* traffic is being shed before the error rate explains it |\n| Timeouts per dependency | timeout counter | Distinguishes a slow dependency from a failing one |\n| Retry rate and retry success ratio | retry counters | A high retry rate that still succeeds is masking a real problem |\n| Fallback / degraded-response rate | fallback counter | Confirms graceful degradation actually engaged |\n\nUntil then, degradation is visible on the [API Overview](d/scp-api-overview) dashboard as a rise in 5xx and latency.\n"
+      }
+    }
+  ]
+}

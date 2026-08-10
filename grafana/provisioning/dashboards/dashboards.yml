@@ -1,0 +1,15 @@
+# Dashboard provisioning: the JSON models in grafana/dashboards/ are the source of truth.
+# Edits made in the Grafana UI are not persisted — export the JSON and commit it instead.
+apiVersion: 1
+
+providers:
+  - name: scalable-content-platform
+    orgId: 1
+    folder: Scalable Content Platform
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /var/lib/grafana/dashboards
+      foldersFromFilesStructure: false

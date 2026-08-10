@@ -1,0 +1,155 @@
+# Alert rules for the SLOs.
+# Every rule carries `for:` (so a single scrape blip cannot page anyone), a severity, and a
+# runbook_url — all three are enforced by the dashboard unit tests.
+
+groups:
+  - name: slo-symptoms
+    rules:
+      # SLO: 95% of reads < 200 ms. Alert on the symptom (latency), not on a cause.
+      - alert: HighReadLatencyP95
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(http_request_duration_seconds_bucket{method="GET"}[5m]))
+          ) > 0.2
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Read P95 latency above the 200 ms SLO"
+          description: >-
+            P95 GET latency has been above 200 ms for 10 minutes. The read path is the
+            performance-critical path (PRD G1).
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-highreadlatencyp95"
+
+      - alert: HighReadLatencyP99
+        expr: |
+          histogram_quantile(
+            0.99,
+            sum by (le) (rate(http_request_duration_seconds_bucket{method="GET"}[5m]))
+          ) > 0.45
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Read P99 latency above the 450 ms SLO"
+          description: >-
+            The tail is out of budget even if P95 is not: a subset of requests is being served
+            far more slowly than the rest.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-highreadlatencyp95"
+
+      - alert: ElevatedErrorRate
+        expr: |
+          sum(rate(http_requests_total{status=~"5.."}[5m]))
+            / sum(rate(http_requests_total[5m])) > 0.001
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "5xx rate above the 0.1% SLO"
+          description: >-
+            More than 0.1% of requests are failing with a server error over the last 5 minutes.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-elevatederrorrate"
+
+      - alert: HighDatabaseQueryLatency
+        expr: |
+          histogram_quantile(
+            0.95,
+            sum by (le) (rate(db_query_duration_seconds_bucket{query="select"}[5m]))
+          ) > 0.05
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "P95 SELECT latency above 50 ms"
+          description: >-
+            The database is the likely cause of any concurrent latency SLO breach. A single
+            query should stay an order of magnitude faster than the request containing it.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-highdatabasequerylatency"
+
+  - name: slo-error-budget
+    rules:
+      # Multi-window, multi-burn-rate alerting. The 30-day budget for a 99.9% SLO is ~43 min.
+      # A 14.4x burn exhausts 2% of the it in an hour: page. A 6x burn exhausts 10% in six hours: ticket.
+      # The short window in each pair suppresses the alert once the burn stops, so it resolves quickly
+      # instead of lingering.
+      - alert: ErrorBudgetBurnFast
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[1h]))
+              / sum(rate(http_requests_total[1h])) > 14.4 * 0.001
+          )
+          and
+          (
+            sum(rate(http_requests_total{status=~"5.."}[5m]))
+              / sum(rate(http_requests_total[5m])) > 14.4 * 0.001
+          )
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Burning the 30-day error budget 14.4x too fast"
+          description: >-
+            At this rate 2% of the monthly error budget is gone every hour. Freeze risky
+            changes and mitigate now.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-errorbudgetburnfast"
+
+      - alert: ErrorBudgetBurnSlow
+        expr: |
+          (
+            sum(rate(http_requests_total{status=~"5.."}[6h]))
+              / sum(rate(http_requests_total[6h])) > 6 * 0.001
+          )
+          and
+          (
+            sum(rate(http_requests_total{status=~"5.."}[30m]))
+              / sum(rate(http_requests_total[30m])) > 6 * 0.001
+          )
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Burning the 30-day error budget 6x too fast"
+          description: >-
+            A steady drip of errors that will exhaust the monthly budget if left alone. Not a
+            page; open a ticket.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-errorbudgetburnslow"
+
+  - name: saturation-and-availability
+    rules:
+      - alert: TargetDown
+        expr: up{job="content-platform"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "A content-platform replica is not being scraped"
+          description: >-
+            Prometheus cannot reach the instance. Either it is down or /metrics is
+            unreachable — check the readiness probe before assuming the former.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-targetdown"
+
+      - alert: HighCpuSaturation
+        expr: rate(process_cpu_seconds_total{job="content-platform"}[5m]) > 0.85
+        for: 15m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Sustained CPU saturation on a replica"
+          description: >-
+            The USE counterpart to the RED alerts: a saturated replica will breach the latency
+            SLO next. Scale out (the app is stateless by design, ADR-0002).
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-highcpusaturation"
+
+      - alert: NoTrafficReceived
+        expr: sum(rate(http_requests_total[10m])) == 0
+        for: 15m
+        labels:
+          severity: info
+        annotations:
+          summary: "No requests reaching the service"
+          description: >-
+            Expected in a quiet local environment; in production it means traffic is not
+            arriving, which the error-rate alerts cannot detect because their denominator
+            is zero.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-notrafficreceived"

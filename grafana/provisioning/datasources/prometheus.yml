@@ -1,0 +1,14 @@
+# Grafana datasource provisioning. The uid is referenced by every panel in
+# grafana/dashboards/*.json, so it must stay `prometheus`.
+apiVersion: 1
+
+datasources:
+  - name: Prometheus
+    uid: prometheus
+    type: prometheus
+    access: proxy
+    url: http://prometheus:9090
+    isDefault: true
+    editable: false
+    jsonData:
+      timeInterval: 15s # matches prometheus.yml scrape_interval

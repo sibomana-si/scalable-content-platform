@@ -1,6 +1,11 @@
 # Local dependency services for development and integration tests.
 # Mirrors the MySQL/Redis service containers in .github/workflows/ci.yml.
-# The application service + Dockerfile land with the deployment milestone.
+#
+#   docker compose up -d                            # mysql + redis only (what the tests need)
+#   docker compose --profile observability up -d    # + prometheus + grafana
+#
+# The observability services are behind a profile so `docker compose up -d` stays exactly what
+# the integration suite requires.
 services:
   mysql:
     image: mysql:8
@@ -26,3 +31,48 @@ services:
       interval: 10s
       timeout: 5s
       retries: 10
+
+  prometheus:
+    image: prom/prometheus:v3.1.0
+    profiles: [observability]
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --web.enable-lifecycle # POST /-/reload after editing alerts.yml
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus-data:/prometheus
+    # The app runs on the host (`uvicorn app.main:app`), not in compose — there is no app
+    # image until the deployment milestone — so the scrape target resolves via the gateway.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:9090/-/healthy"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  grafana:
+    image: grafana/grafana:11.5.1
+    profiles: [observability]
+    depends_on:
+      - prometheus
+    ports:
+      - "3000:3000"
+    environment:
+      # Local only. There is nothing to protect here and a login prompt just slows the loop.
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+      GF_AUTH_DISABLE_LOGIN_FORM: "true"
+      GF_USERS_DEFAULT_THEME: light
+    volumes:
+      - ./grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+
+volumes:
+  prometheus-data:
+  grafana-data:

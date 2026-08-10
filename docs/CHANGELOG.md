@@ -61,6 +61,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0009 records the observability stack: structlog + prometheus-client + OpenTelemetry,
   correlation by `request_id`, pull-based metrics vs. push-based traces, and why two span-naming
   conventions coexist.
+- Grafana dashboards and Prometheus rules, in-repo and provisioned: API Overview (RED + SLO and
+  error-budget panels), Database (statement latency, read/write mix, statements per request, share
+  of request time in the DB), and declared placeholders for Cache (M5) and Resilience (M7). Alert
+  rules cover the latency and error-rate SLOs, multi-window error-budget burn rate (14.4× fast /
+  6× slow), database latency, target-down, CPU saturation and zero-traffic. A consistency test
+  fails the build if any panel or alert references a metric the app does not export, if a rule
+  lacks `for:`/`severity`, or if its `runbook_url` points at a runbook section that does not exist.
+- Local observability stack behind a compose profile: `docker compose --profile observability up -d`
+  adds Prometheus (9090) and Grafana (3000); the plain `docker compose up -d` the integration tests
+  rely on is unchanged.
 - Alembic migrations `0001`–`0004`: schema (roles/users/articles), role seeds, and the two composite
   list indexes (`idx_articles_deleted_created`, `idx_articles_author_deleted_created`).
 - Test harness and suite (acceptance/unit/integration) with an 80% coverage floor enforced via

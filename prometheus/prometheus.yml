@@ -1,0 +1,26 @@
+# Local Prometheus for the `observability` compose profile.
+# Production scrape configuration is Kubernetes service discovery, this file
+# exists so the dashboards and alert rules in this repo can be exercised for real.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+  external_labels:
+    env: local
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  # The application. It runs on the host (`uvicorn app.main:app`) rather than in compose —
+  # there is no app image yet — so the container reaches it through the host gateway.
+  - job_name: content-platform
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["host.docker.internal:8000"]
+        labels:
+          service: scalable-content-platform
+
+  - job_name: prometheus
+    static_configs:
+      - targets: ["localhost:9090"]

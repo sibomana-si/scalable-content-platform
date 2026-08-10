@@ -6,8 +6,8 @@
 |---|---|---|---|---|
 | 1 | Architecture & Foundations | Architecture diagram + running API skeleton | README, [PRD](../requirements/product-requirements.md), [NFR](../requirements/non-functional-requirements.md), [C4 overview](../architecture/overview.md), [ADRs](../architecture/adr/0001-record-architecture-decisions.md), [ERD](../data/data-model.md), [testing strategy](../development/testing-strategy.md) | 🟩 |
 | 2 | Core API & Data | Functional content APIs | [OpenAPI](../api/openapi.md), [API ref](../api/api-reference.md), [error catalog](../api/error-catalog.md), [indexing](../data/indexing-strategy.md), [migrations](../data/migrations.md) | 🟩 |
-| 3 | Auth & Security | Secured APIs w/ role enforcement | [AuthN/Z](../security/authn-authz.md), [secrets](../security/secrets-management.md), [OWASP](../security/owasp-matrix.md), [threat model](../security/threat-model.md) | 🟥 |
-| 4 | Observability | Observable system + dashboards | [Observability guide](../observability/observability-guide.md), [SLO](../observability/slo.md), [dashboards](../observability/dashboards.md) | 🟥 |
+| 3 | Auth & Security | Secured APIs w/ role enforcement | [AuthN/Z](../security/authn-authz.md), [secrets](../security/secrets-management.md), [OWASP](../security/owasp-matrix.md), [threat model](../security/threat-model.md) | 🟩 |
+| 4 | Observability | Observable system + dashboards | [Observability guide](../observability/observability-guide.md), [SLO](../observability/slo.md), [dashboards](../observability/dashboards.md), [alerting](../observability/alerting-runbooks.md), [ADR-0009](../architecture/adr/0009-observability-stack.md) | 🟩 |
 | 5 | Scalability & Caching | Measurable perf improvements | [Caching](../data/caching-strategy.md), [capacity model](../architecture/capacity-scaling-model.md) | 🟥 |
 | 6 | Load Testing | Load test report w/ graphs | [Plan](../performance/load-test-plan.md), [report](../performance/load-test-report.md) | 🟥 |
 | 7 | Fault Injection | Resilient system under failure | [Fault tolerance](../resilience/fault-tolerance-design.md), [chaos report](../resilience/chaos-test-report.md), [alerting](../observability/alerting-runbooks.md) | 🟥 |
@@ -29,3 +29,16 @@ Add a dated entry below per week summarizing what was completed, metrics capture
   compare-and-set optimistic concurrency (`If-Match`/409), canonical error envelope, dev
   `X-User-Id` auth stub, and Alembic migrations 0001–0004 (schema, role seeds, two composite list
   indexes). Evidenced by the green FR-004/FR-005 acceptance suites in CI.
+- 2026-08-01 — Week 3 — Auth and security delivered: JWT registration/login (FR-001/FR-002) with
+  Argon2id hashing and timing-equalized, non-enumerating 401s; token verification and RBAC
+  enforcement in `AuthMiddleware` over a pure, unit-tested route policy (FR-003, 401 before 403);
+  registration input validation with breached-password screening. Replaces the `X-User-Id` dev
+  stub. Evidenced by the green FR-001/FR-002/FR-003 acceptance suites.
+- 2026-08-01 — Week 4 — Observability delivered: structured JSON logging correlated by
+  `request_id` (which also finally feeds the error envelope's `request_id`), Prometheus RED
+  metrics at `/metrics` with unit-tested cardinality guards, OpenTelemetry tracing (off unless a
+  collector is configured) giving server → domain → SQL spans in one trace, and four provisioned
+  Grafana dashboards plus alert rules on the SLO error-budget burn rate, runnable locally via
+  `docker compose --profile observability up -d`. Recorded in
+  [ADR-0009](../architecture/adr/0009-observability-stack.md). The Cache and Resilience dashboards
+  ship as declared placeholders — their metrics land in M5 and M7.
