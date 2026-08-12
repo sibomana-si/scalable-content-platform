@@ -44,6 +44,11 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     The 'begin()' block commits when the handler returns cleanly and rolls back when
     anything raises through it (domain errors included; they become responses in the
     app-level exception handlers after this teardown). Handlers never commit.
+
+    Because the commit is this generator's teardown, callers must declare the dependency
+    with ``scope="function"``. FastAPI's default for a dependency with yield is
+    ``scope="request"``, which runs teardown after the response has been sent to the
+    client — the write would then be announced before it was durable.
     """
 
     async with get_sessionmaker()() as session, session.begin():

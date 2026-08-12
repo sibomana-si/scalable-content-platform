@@ -13,7 +13,11 @@ from app.services.article_service import ArticleService
 from app.services.auth_service import AuthService
 from app.services.exceptions import UnauthenticatedError
 
-SessionDep = Annotated[AsyncSession, Depends(get_session)]
+# scope="function" is load-bearing, not a stylistic choice. FastAPI defaults a dependency with
+# yield to scope="request", which ends it after the response has been sent — the commit in
+# get_session would then land behind the response, and a 201 would announce a row the next
+# request cannot yet see. "function" ends it before the response leaves the router.
+SessionDep = Annotated[AsyncSession, Depends(get_session, scope="function")]
 
 
 async def get_current_user(request: Request, session: SessionDep) -> User:
