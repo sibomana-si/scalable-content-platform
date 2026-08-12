@@ -17,6 +17,8 @@
         "datasource": { "type": "prometheus", "uid": "prometheus" },
         "query": "label_values(http_requests_total, route)",
         "includeAll": true,
+        "allValue": ".*",
+        "refresh": 2,
         "multi": true,
         "current": { "text": "All", "value": "$__all" }
       }
@@ -50,7 +52,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "1 - (sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])))",
+          "expr": "1 - ((sum(rate(http_requests_total{status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_requests_total[5m])))",
           "legendFormat": "availability"
         }
       ]
@@ -127,7 +129,7 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[30d])) / sum(rate(http_requests_total[30d]))) / 0.001",
+          "expr": "((sum(rate(http_requests_total{status=~\"5..\"}[30d])) or vector(0)) / sum(rate(http_requests_total[30d]))) / 0.001",
           "legendFormat": "budget consumed"
         }
       ]
@@ -176,13 +178,13 @@
         {
           "refId": "A",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m]))",
+          "expr": "(sum(rate(http_requests_total{status=~\"5..\"}[5m])) or vector(0)) / sum(rate(http_requests_total[5m]))",
           "legendFormat": "5xx ratio"
         },
         {
           "refId": "B",
           "datasource": { "type": "prometheus", "uid": "prometheus" },
-          "expr": "sum(rate(http_requests_total{status=~\"4..\"}[5m])) / sum(rate(http_requests_total[5m]))",
+          "expr": "(sum(rate(http_requests_total{status=~\"4..\"}[5m])) or vector(0)) / sum(rate(http_requests_total[5m]))",
           "legendFormat": "4xx ratio"
         }
       ]

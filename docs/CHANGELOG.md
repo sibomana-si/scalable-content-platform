@@ -67,7 +67,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   rules cover the latency and error-rate SLOs, multi-window error-budget burn rate (14.4× fast /
   6× slow), database latency, target-down, CPU saturation and zero-traffic. A consistency test
   fails the build if any panel or alert references a metric the app does not export, if a rule
-  lacks `for:`/`severity`, or if its `runbook_url` points at a runbook section that does not exist.
+  lacks `for:`/`severity`, if its `runbook_url` points at a runbook section that does not exist,
+  if a label-filtered ratio panel omits the `or vector(0)` guard that keeps it from reading
+  "No data" while healthy, or if a provisioned query variable would resolve to an empty option
+  list. Verified against the running stack: Prometheus scraping the app, all nine rules loading,
+  and every panel rendering real values in Grafana — including under injected failure, where
+  availability fell to 85% and the burn-rate alert reached `firing`.
 - Local observability stack behind a compose profile: `docker compose --profile observability up -d`
   adds Prometheus (9090) and Grafana (3000); the plain `docker compose up -d` the integration tests
   rely on is unchanged.
