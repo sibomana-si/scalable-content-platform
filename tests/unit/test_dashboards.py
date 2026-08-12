@@ -222,6 +222,56 @@ def test_the_api_overview_dashboard_covers_rate_errors_and_duration() -> None:
         assert quantile in expressions
 
 
+@pytest.mark.parametrize(("name", "dashboard"), dashboards())
+def test_status_ratio_panels_survive_having_no_errors(name: str, dashboard: dict) -> None:
+    """A ratio whose numerator filters on `status` must guard the numerator with `or vector(0)`.
+
+    Caught by rendering the stack for real: with no 5xx in the window,
+    ``sum(rate(http_requests_total{status=~"5.."}[5m]))`` is an empty vector, and an empty
+    vector divided by anything stays empty — so the Availability and error-rate panels read
+    "No data" during exactly the healthy periods they are supposed to confirm, which is
+    indistinguishable from a broken dashboard. Alert rules are deliberately exempt: there the
+    empty vector is the correct "nothing is wrong, do not fire".
+    """
+
+    for title, expr in panel_expressions(dashboard):
+        flattened = " ".join(expr.split())
+        for match in re.finditer(r'sum\(rate\([^)]*status=~"[0-9.]+"[^)]*\)\)', flattened):
+            if "/" not in flattened[match.end() :] and "/" not in flattened[: match.start()]:
+                continue  # not a ratio, so an empty result is not misleading
+            guarded = flattened[match.end() : match.end() + 20].lstrip().startswith("or vector(0)")
+            assert guarded, (
+                f"{name} panel {title!r} divides using {match.group()} without "
+                f"`or vector(0)`; it will render 'No data' instead of 0 when there are no "
+                f"matching responses"
+            )
+
+
+@pytest.mark.parametrize(("name", "dashboard"), dashboards())
+def test_query_variables_refresh_and_have_an_all_value(name: str, dashboard: dict) -> None:
+    """A provisioned query variable must refresh, and its "All" must be a usable regex.
+
+    These dashboards are provisioned from JSON, never saved through the UI, so nothing ever
+    populates a variable's ``options`` array. Grafana defaults an absent ``refresh`` to 0
+    ("never"), which would leave the option list empty and expand ``$route`` to nothing —
+    every per-route panel silently renders "No data".
+    """
+
+    for variable in dashboard.get("templating", {}).get("list", []):
+        if variable.get("type") != "query":
+            continue
+        assert variable.get("refresh") in (1, 2), (
+            f"{name}: query variable {variable['name']!r} has refresh="
+            f"{variable.get('refresh')!r}; provisioned dashboards need 1 (on load) or 2 "
+            f"(on time-range change) because no saved `options` list exists"
+        )
+        if variable.get("includeAll"):
+            assert variable.get("allValue"), (
+                f"{name}: query variable {variable['name']!r} offers 'All' without an "
+                f"allValue, so 'All' depends on the option list being populated"
+            )
+
+
 def test_the_pending_dashboards_declare_why_they_are_empty() -> None:
     for name in ("cache.json", "resilience.json"):
         dashboard = dict(dashboards())[name]

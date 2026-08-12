@@ -1,6 +1,6 @@
 # Dashboards Catalog
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-12
 
 What each Grafana dashboard shows and how to read it.
 
@@ -34,6 +34,16 @@ unexported metric, and the two pending dashboards must say so.
 - Metric names, label sets and cardinality guards are fixed by the
   [observability guide](observability-guide.md); [ADR-0009](../architecture/adr/0009-observability-stack.md)
   records why.
+- **A ratio whose numerator filters on a label must guard it with `or vector(0)`** — e.g.
+  `(sum(rate(http_requests_total{status=~"5.."}[5m])) or vector(0)) / sum(rate(...))`. Without the
+  guard, a window containing no matching responses selects an *empty vector*, and an empty vector
+  divided by anything stays empty, so the panel reads "No data" during precisely the healthy
+  periods it exists to confirm. Alert rules are the exception: there the empty vector is the
+  correct "nothing is wrong, do not fire". Enforced by `tests/unit/test_dashboards.py`.
+- **Query variables need `refresh: 1|2` and, if they offer "All", an `allValue`.** These dashboards
+  are provisioned from JSON and never saved through the UI, so nothing populates a variable's
+  `options` array; Grafana's default `refresh: 0` would leave the list empty and expand `$route` to
+  nothing. Also enforced by `tests/unit/test_dashboards.py`.
 
 ## Bring-up (local)
 
