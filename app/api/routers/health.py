@@ -10,10 +10,9 @@ from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 from redis.asyncio import Redis
 from sqlalchemy import text
-from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.api.deps import SessionDep
 from app.cache.client import get_redis
-from app.db.session import get_session
 
 router = APIRouter(prefix="/health", tags=["health"])
 
@@ -25,7 +24,9 @@ async def live() -> dict[str, str]:
 
 @router.get("/ready")
 async def ready(
-    session: Annotated[AsyncSession, Depends(get_session)],
+    # SessionDep rather than a local Depends(get_session): the transaction scope is declared
+    # once, in app/api/deps.py, and must not be able to drift per-router.
+    session: SessionDep,
     redis: Annotated[Redis, Depends(get_redis)],
 ) -> JSONResponse:
     checks: dict[str, str] = {}

@@ -4,7 +4,7 @@
 # requirements.lock after install for reproducible CI/dev environments.
 
 # --- Web / ASGI ---
-fastapi>=0.115
+fastapi>=0.139            # >=0.139: Depends(scope="function"), which the transaction boundary needs
 uvicorn[standard]>=0.30        # ASGI server; standard extra = uvloop + httptools
 
 # --- Data: MySQL (async app driver, sync migrations driver) + Redis ---

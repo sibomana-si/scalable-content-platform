@@ -86,4 +86,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0007 (single role per user via FK) and ADR-0008 (Alembic for schema migrations).
 - `cryptography` runtime dependency — required by aiomysql/pymysql for MySQL 8 `caching_sha2_password` authentication.
 
+### Fixed
+- Read-your-writes violation on every write endpoint: the request transaction committed after
+  the response had been sent, so `POST /v1/auth/register` returned 201 for a row an immediately
+  following `POST /v1/auth/login` could not yet see (401 in roughly three attempts out of five;
+  a 300 ms pause hid it). FastAPI ends a dependency with yield after the response by default,
+  and the commit is `get_session`'s teardown, so `SessionDep` now declares `scope="function"` —
+  which ends it before the response leaves the router. `requirements.txt` raises the FastAPI
+  floor to 0.139 accordingly, and `/health/ready` now takes the shared `SessionDep` so the
+  transaction scope cannot drift per-router. Covered by an ordering test on the dependency and,
+  because the in-process `ASGITransport` harness structurally cannot observe this class of bug,
+  a register-then-login test against a real uvicorn socket.
+
 [Unreleased]: https://github.com/si-sibomana/scalable-content-platform/commits/main
