@@ -1,11 +1,16 @@
 """Password hashing (Argon2id) and JWT access tokens (HS256).
 
-Thin, pure helpers over ``Settings``: no DB/network I/O. Any invalid, tampered, or expired
-token surfaces as :class:`UnauthenticatedError` so the middleware and dependencies can map it
-to a single generic 401 (no leakage of why a token failed).
+Thin helpers over ``Settings``: no DB/network I/O. Any invalid, tampered, or expired token
+surfaces as :class:`UnauthenticatedError` so the middleware and dependencies can map it to a
+single generic 401 (no leakage of why a token failed).
+
+Password hashing is the one expensive thing here and is therefore ``async``.
 """
 
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from datetime import UTC, datetime, timedelta
+from functools import lru_cache
 from typing import Any
 
 import jwt
@@ -19,21 +24,51 @@ from app.services.exceptions import UnauthenticatedError
 _hasher = PasswordHasher()
 
 
-def hash_password(password: str) -> str:
-    """Return an Argon2id hash (embeds a random salt and the cost parameters)."""
+@lru_cache(maxsize=1)
+def get_password_executor() -> ThreadPoolExecutor:
+    """The dedicated, bounded thread pool every password hash runs in.
 
+    Argon2id is designed to be slow and memory-hard — roughly 145 ms of CPU and 64 MiB per
+    hash at the library defaults. Run inline from a coroutine it stalls the entire worker for
+    that whole time, so a few concurrent logins push unrelated cached reads past the 200 ms
+    P95 SLO. It releases the GIL, so a thread genuinely gets that time back.
+
+    The pool is separate from the one Starlette uses for sync endpoints and other blocking
+    calls, so a burst of logins cannot starve them, and it is bounded because unbounded
+    offload would just trade the stall for a memory blow-up (N × 64 MiB). One pool per
+    process, reaped by the interpreter at exit.
+    """
+    return ThreadPoolExecutor(
+        max_workers=get_settings().password_hash_max_threads,
+        thread_name_prefix="pwhash",
+    )
+
+
+def _hash_password_blocking(password: str) -> str:
     return _hasher.hash(password)
 
 
-def verify_password(password: str, password_hash: str) -> bool:
-    """True if password matches password_hash; False on mismatch or malformed hash."""
-
+def _verify_password_blocking(password: str, password_hash: str) -> bool:
     try:
         return _hasher.verify(password_hash, password)
-    # Argon2Error covers mismatch/verification failures; InvalidError (a ValueError)
+    # Argon2Error covers mismatch/verification failures; InvalidHashError (a ValueError)
     # covers a stored value that isn't a well-formed Argon2 hash.
     except (Argon2Error, InvalidHashError):
         return False
+
+
+async def hash_password(password: str) -> str:
+    """Return an Argon2id hash (embeds a random salt and the cost parameters)."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(get_password_executor(), _hash_password_blocking, password)
+
+
+async def verify_password(password: str, password_hash: str) -> bool:
+    """True if password matches password_hash; False on mismatch or malformed hash."""
+    loop = asyncio.get_running_loop()
+    return await loop.run_in_executor(
+        get_password_executor(), _verify_password_blocking, password, password_hash
+    )
 
 
 def create_access_token(sub: str, role: str) -> str:

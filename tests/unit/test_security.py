@@ -39,29 +39,33 @@ def _future() -> int:
 # --- Password hashing ---------------------------------------------------------------------
 
 
-def test_hash_is_not_plaintext() -> None:
-    digest = hash_password("correct horse battery staple")
+# hash_password/verify_password are coroutines: Argon2id is offloaded to a bounded thread
+# pool so it cannot stall the event loop.
+
+
+async def test_hash_is_not_plaintext() -> None:
+    digest = await hash_password("correct horse battery staple")
     assert digest != "correct horse battery staple"
     assert digest.startswith("$argon2")
 
 
-def test_verify_round_trip() -> None:
-    digest = hash_password("s3cret-password!!")
-    assert verify_password("s3cret-password!!", digest) is True
+async def test_verify_round_trip() -> None:
+    digest = await hash_password("s3cret-password!!")
+    assert await verify_password("s3cret-password!!", digest) is True
 
 
-def test_verify_rejects_wrong_password() -> None:
-    digest = hash_password("s3cret-password!!")
-    assert verify_password("not-the-password", digest) is False
+async def test_verify_rejects_wrong_password() -> None:
+    digest = await hash_password("s3cret-password!!")
+    assert await verify_password("not-the-password", digest) is False
 
 
-def test_same_password_hashes_differ() -> None:
+async def test_same_password_hashes_differ() -> None:
     # Random per-hash salt: two hashes of the same input must not be equal.
-    assert hash_password("same-password-123") != hash_password("same-password-123")
+    assert await hash_password("same-password-123") != await hash_password("same-password-123")
 
 
-def test_verify_handles_malformed_hash() -> None:
-    assert verify_password("whatever", "not-a-valid-argon2-hash") is False
+async def test_verify_handles_malformed_hash() -> None:
+    assert await verify_password("whatever", "not-a-valid-argon2-hash") is False
 
 
 # --- JWT access tokens --------------------------------------------------------------------

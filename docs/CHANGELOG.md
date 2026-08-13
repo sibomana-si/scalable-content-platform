@@ -97,5 +97,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transaction scope cannot drift per-router. Covered by an ordering test on the dependency and,
   because the in-process `ASGITransport` harness structurally cannot observe this class of bug,
   a register-then-login test against a real uvicorn socket.
+- Argon2id password hashing no longer blocks the event loop. `hash_password`/`verify_password`
+  were synchronous and called straight from `async def` handlers, so every register and login
+  stalled the entire worker for the full hashing cost (~145 ms locally) — enough for a handful
+  of concurrent logins to push unrelated cached reads past the 200 ms P95 SLO. Both are now
+  coroutines that run the hash in a dedicated `ThreadPoolExecutor` (Argon2 releases the GIL, so
+  the time is genuinely reclaimed). The pool is separate from the one Starlette uses for sync
+  endpoints, so a login burst cannot starve them, and bounded by `PASSWORD_HASH_MAX_THREADS`
+  (default 4) because unbounded offload would trade the stall for a memory blow-up at ~64 MiB
+  per in-flight hash.
 
 [Unreleased]: https://github.com/si-sibomana/scalable-content-platform/commits/main

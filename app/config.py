@@ -32,6 +32,10 @@ class Settings(BaseSettings):
     jwt_secret: SecretStr = SecretStr("")
     jwt_algorithm: str = "HS256"
     jwt_expire_seconds: int = 900
+    # Argon2id hashing runs in its own bounded thread pool. Each in-flight hash costs
+    # ~64 MiB, so this is the memory ceiling as much as the throughput one: raise it for
+    # login-heavy deployments with headroom, lower it under a tight limit.
+    password_hash_max_threads: int = 4
 
     # --- Observability ---
     # Empty endpoint = tracing off: no provider, no exporter, no outbound connection attempts.

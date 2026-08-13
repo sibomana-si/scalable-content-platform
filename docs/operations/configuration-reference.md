@@ -20,6 +20,7 @@ Every environment variable: name, purpose, default, required. Mirror in `.env.ex
 | `JWT_SECRET` | JWT signing key (secret): HS256 symmetric key; app refuses to sign/verify if unset | — | Yes |
 | `JWT_ALGORITHM` | JWT signing algorithm | `HS256` | No |
 | `JWT_EXPIRE_SECONDS` | Access token TTL (seconds) | `900` | No |
+| `PASSWORD_HASH_MAX_THREADS` | Size of the dedicated Argon2id hashing pool. Caps concurrent hashes, so it is a memory ceiling (~64 MiB each) as much as a throughput one | `4` | No |
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | OTLP/HTTP collector endpoint. **Unset disables tracing entirely** — no provider, no exporter, no outbound connections | — (tracing off) | No |
 | `OTEL_SERVICE_NAME` | `service.name` on every span; without it a shared collector attributes traces to `unknown_service` | `scalable-content-platform` | No |
 
