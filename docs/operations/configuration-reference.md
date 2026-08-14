@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-27
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-14
 
 Every environment variable: name, purpose, default, required. Mirror in `.env.example`.
 
@@ -16,7 +16,10 @@ Every environment variable: name, purpose, default, required. Mirror in `.env.ex
 | `MYSQL_USER` | DB user | — | Yes |
 | `MYSQL_PASSWORD` | DB password (secret) | — | Yes |
 | `DB_POOL_SIZE` | Connection pool size | `10` | No |
+| `READINESS_TIMEOUT_SECONDS` | Per-dependency ceiling for `/health/ready`. Kubernetes' probe `timeoutSeconds` should be ≥ this | `2.0` | No |
 | `REDIS_URL` | Redis connection URL | — | Yes |
+| `REDIS_SOCKET_TIMEOUT` | Per-command socket timeout (seconds). The library default is unbounded, which turns a blackholed Redis into an indefinite wait for every caller | `2.0` | No |
+| `REDIS_SOCKET_CONNECT_TIMEOUT` | Connect timeout (seconds), same reasoning | `2.0` | No |
 | `JWT_SECRET` | JWT signing key (secret): HS256 symmetric key; app refuses to sign/verify if unset | — | Yes |
 | `JWT_ALGORITHM` | JWT signing algorithm | `HS256` | No |
 | `JWT_EXPIRE_SECONDS` | Access token TTL (seconds) | `900` | No |

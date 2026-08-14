@@ -1,6 +1,6 @@
 # Alerting Runbooks
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-14
 
 One runbook per alert: symptom → likely cause → diagnosis → remediation.
 
@@ -130,6 +130,10 @@ dashboards are for, and appear here only where they are actionable on their own.
 - **Why it exists:** the error-rate alerts divide by the request rate, so at zero traffic they are
   silent no matter how broken the service is. Expected in a quiet local or staging environment; in
   production it means requests are not arriving.
+- **What counts:** `/health/live`, `/health/ready` and `/metrics` are excluded from
+  `http_requests_total` (`PROBE_PATHS` in `app/observability/metrics.py`), so this measures real
+  traffic. Were probes counted, Kubernetes and Prometheus would hold the denominator permanently
+  above zero and this alert could never fire — in exactly the deployment where it matters.
 - **Diagnose:** check the gateway/ingress and DNS before the app — the app being healthy while
   receiving nothing points upstream.
 - **Remediate:** upstream routing; silence this alert in environments where idleness is normal.

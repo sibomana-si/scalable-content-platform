@@ -38,18 +38,22 @@ async def test_exposition_declares_the_documented_collectors(client: AsyncClient
     assert "# TYPE db_query_duration_seconds histogram" in body
 
 
-async def test_a_request_increments_the_counter_for_its_own_route(client: AsyncClient) -> None:
-    before = counter("/health/live")
+# /openapi.json rather than a health route: probes are excluded from the RED metrics,
+# so they cannot carry these assertions.
 
-    await client.get("/health/live")
-    assert counter("/health/live") == before + 1
+
+async def test_a_request_increments_the_counter_for_its_own_route(client: AsyncClient) -> None:
+    before = counter("/openapi.json")
+
+    await client.get("/openapi.json")
+    assert counter("/openapi.json") == before + 1
 
 
 async def test_a_request_records_one_latency_observation(client: AsyncClient) -> None:
-    before = duration_count("/health/live")
-    await client.get("/health/live")
+    before = duration_count("/openapi.json")
+    await client.get("/openapi.json")
 
-    assert duration_count("/health/live") == before + 1
+    assert duration_count("/openapi.json") == before + 1
 
 
 async def test_error_responses_are_counted_under_their_status(client: AsyncClient) -> None:
@@ -73,6 +77,20 @@ async def test_unmatched_paths_do_not_mint_a_series_per_path(client: AsyncClient
     body = (await client.get("/metrics")).text
 
     assert "scanner-probe" not in body
+
+
+async def test_health_probes_are_excluded(client: AsyncClient) -> None:
+    before_live = counter("/health/live")
+    before_ready = duration_count("/health/ready")
+
+    await client.get("/health/live")
+    await client.get("/health/live")
+    await client.get("/health/ready")
+
+    # Kubernetes probes are infrastructure, not traffic: counted, they dilute the availability
+    # ratio and the error budget, and they hold NoTrafficReceived permanently silent.
+    assert counter("/health/live") == before_live
+    assert duration_count("/health/ready") == before_ready
 
 
 async def test_the_scrape_endpoint_excludes_itself(client: AsyncClient) -> None:
