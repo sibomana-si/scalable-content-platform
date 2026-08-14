@@ -36,6 +36,13 @@ disable_created_metrics()
 # self-instrumentation exclusion cannot drift apart.
 METRICS_PATH = "/metrics"
 
+# Orchestrator probes, excluded from the RED metrics. Counted, they dilute the availability
+# ratio and the error budget with traffic no user ever sent, and they hold the denominator of
+# ``NoTrafficReceived`` permanently non-zero — which is exactly the condition it exists to
+# detect. Matched against the route label, not a ``/health`` prefix: unmatched paths collapse
+# to ``__unmatched__``, so a scanner cannot slip a series past this under ``/health/anything``.
+PROBE_PATHS = frozenset({"/health/live", "/health/ready"})
+
 # The only values the ``query`` label may take.
 SQL_OPERATIONS = frozenset({"select", "insert", "update", "delete", "other"})
 

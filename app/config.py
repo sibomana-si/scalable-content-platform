@@ -26,6 +26,11 @@ class Settings(BaseSettings):
 
     # --- Redis ---
     redis_url: str = "redis://localhost:6379/0"
+    # redis.asyncio defaults both of these to None. An unresponsive-but-reachable server then
+    # hangs every command forever, and an unbounded wait is how a cache outage becomes a
+    # caller outage: whatever the caller holds while waiting, it holds for good.
+    redis_socket_timeout: float = 2.0
+    redis_socket_connect_timeout: float = 2.0
 
     # --- Auth (JWT) ---
     # SecretStr keeps the signing key out of repr()/logs; read it via require_signing_key().
@@ -36,6 +41,11 @@ class Settings(BaseSettings):
     # ~64 MiB, so this is the memory ceiling as much as the throughput one: raise it for
     # login-heavy deployments with headroom, lower it under a tight limit.
     password_hash_max_threads: int = 4
+
+    # --- Health probes ---
+    # Per-dependency ceiling for /health/ready. Kubernetes' probe `timeoutSeconds` should be
+    # at least this, or the orchestrator gives up while the handler is still working.
+    readiness_timeout_seconds: float = 2.0
 
     # --- Observability ---
     # Empty endpoint = tracing off: no provider, no exporter, no outbound connection attempts.

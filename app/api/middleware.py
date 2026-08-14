@@ -40,7 +40,7 @@ from app.observability.context import (
     sanitize_request_id,
 )
 from app.observability.logging import get_logger
-from app.observability.metrics import METRICS_PATH, observe_request, route_label
+from app.observability.metrics import METRICS_PATH, PROBE_PATHS, observe_request, route_label
 from app.observability.tracing import annotate_current_span
 from app.services.exceptions import UnauthenticatedError
 
@@ -201,9 +201,10 @@ class MetricsMiddleware(BaseHTTPMiddleware):
     @staticmethod
     def _observe(request: Request, status: int, started: float) -> None:
         route = route_label(request.scope)
-        if route == METRICS_PATH:
-            # Scraping is not traffic; self-instrumentation would make the scrape interval
-            # show up as a request rate.
+        if route == METRICS_PATH or route in PROBE_PATHS:
+            # Neither scraping nor probing is traffic: self-instrumentation would make the
+            # scrape interval look like a request rate, and probes would put a floor under
+            # every ratio computed from these counters.
             return
         observe_request(route, request.method, status, perf_counter() - started)
 

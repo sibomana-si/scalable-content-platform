@@ -97,6 +97,22 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   transaction scope cannot drift per-router. Covered by an ordering test on the dependency and,
   because the in-process `ASGITransport` harness structurally cannot observe this class of bug,
   a register-then-login test against a real uvicorn socket.
+- `/health/ready` can no longer cause the outage it reports. It ran its `SELECT 1` inside the
+  request transaction, so the pooled connection stayed checked out until the end of the request
+  — across the Redis probe, which was unbounded (`redis.asyncio` defaults `socket_timeout` to
+  `None`). Against a reachable-but-unresponsive Redis every probe pinned a connection
+  indefinitely, and since Kubernetes retries on a timer while uvicorn does not cancel the
+  handler on client disconnect, they accumulated until the pool (10 + 10 overflow) was gone and
+  real traffic blocked for `pool_timeout`; a 30-second hang was then reported as `200 ready`.
+  Readiness now takes its own short-lived AUTOCOMMIT connection, released before Redis is
+  touched, and bounds each check with `READINESS_TIMEOUT_SECONDS` (default 2s) so a hung
+  dependency becomes a prompt 503 rather than an accumulating orphan. The shared Redis client
+  gained `REDIS_SOCKET_TIMEOUT` / `REDIS_SOCKET_CONNECT_TIMEOUT` (default 2s each), which the
+  M5 cache-aside path inherits.
+- `/health/live` and `/health/ready` are excluded from the RED metrics, as `/metrics` already
+  was. Probe traffic was diluting the availability ratio and the error budget with requests no
+  user sent, and it held the denominator of `NoTrafficReceived` permanently above zero — an
+  alert that could therefore never fire in the deployment it exists for.
 - Argon2id password hashing no longer blocks the event loop. `hash_password`/`verify_password`
   were synchronous and called straight from `async def` handlers, so every register and login
   stalled the entire worker for the full hashing cost (~145 ms locally) — enough for a handful
