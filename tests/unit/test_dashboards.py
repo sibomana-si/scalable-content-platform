@@ -273,12 +273,22 @@ def test_query_variables_refresh_and_have_an_all_value(name: str, dashboard: dic
 
 
 def test_the_pending_dashboards_declare_why_they_are_empty() -> None:
-    for name in ("cache.json", "resilience.json"):
+    for name in ("resilience.json",):
         dashboard = dict(dashboards())[name]
         text = json.dumps(dashboard).lower()
 
         assert panel_expressions(dashboard) == []
         assert "pending" in text
+
+
+def test_the_cache_dashboard_covers_the_hit_ratio_and_the_degradation_signal() -> None:
+    """is the cache working, and is it failing open?"""
+    dashboard = dict(dashboards())["cache.json"]
+    expressions = " ".join(expr for _, expr in panel_expressions(dashboard))
+
+    assert "cache_hits_total" in expressions
+    assert "cache_misses_total" in expressions
+    assert "cache_errors_total" in expressions
 
 
 # --- alert rules -----------------------------------------------------------------------------

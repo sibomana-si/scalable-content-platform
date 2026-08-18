@@ -20,6 +20,11 @@ Every environment variable: name, purpose, default, required. Mirror in `.env.ex
 | `REDIS_URL` | Redis connection URL | — | Yes |
 | `REDIS_SOCKET_TIMEOUT` | Per-command socket timeout (seconds). The library default is unbounded, which turns a blackholed Redis into an indefinite wait for every caller | `2.0` | No |
 | `REDIS_SOCKET_CONNECT_TIMEOUT` | Connect timeout (seconds), same reasoning | `2.0` | No |
+| `CACHE_ENABLED` | Cache-aside master switch. `false` bypasses Redis completely — no connection, no keys — and every read goes to MySQL | `true` | No |
+| `CACHE_ARTICLE_TTL_SECONDS` | TTL for a cached article body | `300` | No |
+| `CACHE_LIST_TTL_SECONDS` | TTL for a cached list page. Shorter than an article TTL: pages go stale faster than rows | `60` | No |
+| `CACHE_TTL_JITTER` | Fraction of the TTL to spread entries over. A fixed TTL expires a whole generation of keys at once and every reader then misses together | `0.2` | No |
+| `CACHE_LOCK_TIMEOUT_SECONDS` | Single-flight lock TTL, and the budget a loser waits before it reads MySQL itself | `2.0` | No |
 | `JWT_SECRET` | JWT signing key (secret): HS256 symmetric key; app refuses to sign/verify if unset | — | Yes |
 | `JWT_ALGORITHM` | JWT signing algorithm | `HS256` | No |
 | `JWT_EXPIRE_SECONDS` | Access token TTL (seconds) | `900` | No |

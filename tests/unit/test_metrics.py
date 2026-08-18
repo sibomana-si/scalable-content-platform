@@ -13,6 +13,9 @@ from app.observability.metrics import (
     SQL_OPERATIONS,
     Metrics,
     build_metrics,
+    observe_cache_error,
+    observe_cache_hit,
+    observe_cache_miss,
     observe_query,
     observe_request,
     render_metrics,
@@ -215,3 +218,53 @@ def test_render_metrics_declares_collectors_before_they_are_used(metrics: Metric
     # HELP/TYPE headers are emitted for declared-but-unobserved collectors, so a scrape is
     # well-formed from the very first one.
     assert b"http_requests_total" in payload
+
+
+# --- cache metrics --------------------------------------------------------------------------
+
+
+def cache_counter(m: Metrics, name: str, labels: dict[str, str]) -> float | None:
+    return m.registry.get_sample_value(name, labels)
+
+
+def test_cache_collectors_carry_the_documented_names_and_labels(metrics: Metrics) -> None:
+    names = {m.name for m in metrics.registry.collect()}
+
+    assert {"cache_hits", "cache_misses", "cache_errors"} <= names
+    assert metrics.cache_hits._labelnames == ("entity",)
+    assert metrics.cache_misses._labelnames == ("entity",)
+    assert metrics.cache_errors._labelnames == ("operation",)
+
+
+def test_observe_cache_hit_and_miss_are_separate_series(metrics: Metrics) -> None:
+    observe_cache_hit("article", metrics=metrics)
+    observe_cache_miss("article", metrics=metrics)
+    observe_cache_miss("list", metrics=metrics)
+
+    assert cache_counter(metrics, "cache_hits_total", {"entity": "article"}) == 1.0
+    assert cache_counter(metrics, "cache_misses_total", {"entity": "article"}) == 1.0
+    assert cache_counter(metrics, "cache_misses_total", {"entity": "list"}) == 1.0
+
+
+def test_cache_entity_label_is_a_closed_set(metrics: Metrics) -> None:
+    # An unbounded entity label is a memory hole in the scrape target; anything unknown
+    # must collapse into the closed set rather than mint a new series.
+    observe_cache_hit("article:42", metrics=metrics)
+
+    assert cache_counter(metrics, "cache_hits_total", {"entity": "article:42"}) is None
+    assert cache_counter(metrics, "cache_hits_total", {"entity": "other"}) == 1.0
+
+
+def test_cache_operation_label_is_a_closed_set(metrics: Metrics) -> None:
+    observe_cache_error("DEL article:42", metrics=metrics)
+
+    assert cache_counter(metrics, "cache_errors_total", {"operation": "other"}) == 1.0
+
+
+def test_cache_error_counts_under_its_operation(metrics: Metrics) -> None:
+    observe_cache_error("get", metrics=metrics)
+    observe_cache_error("get", metrics=metrics)
+    observe_cache_error("set", metrics=metrics)
+
+    assert cache_counter(metrics, "cache_errors_total", {"operation": "get"}) == 2.0
+    assert cache_counter(metrics, "cache_errors_total", {"operation": "set"}) == 1.0

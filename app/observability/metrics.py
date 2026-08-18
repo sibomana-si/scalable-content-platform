@@ -46,6 +46,14 @@ PROBE_PATHS = frozenset({"/health/live", "/health/ready"})
 # The only values the ``query`` label may take.
 SQL_OPERATIONS = frozenset({"select", "insert", "update", "delete", "other"})
 
+# The only values the cache ``entity`` label may take. It names the key namespace, not the
+# key: ``article:42`` as a label would mint one series per article.
+CACHE_ENTITIES = frozenset({"article", "list", "other"})
+
+# The only values the cache ``operation`` label may take. Each names a cache call site, so
+# a degradation graph shows which half of the cache is failing.
+CACHE_OPERATIONS = frozenset({"get", "set", "delete", "incr", "lock", "other"})
+
 # Boundaries deliberately include 0.2 and 0.45: the SLO is P95 < 200 ms / P99 < 450 ms, and
 # `histogram_quantile` interpolates within a bucket, so a quantile is only trustworthy at a
 # bucket edge.
@@ -99,6 +107,9 @@ class Metrics:
     requests: Counter
     request_duration: Histogram
     db_query_duration: Histogram
+    cache_hits: Counter
+    cache_misses: Counter
+    cache_errors: Counter
 
 
 def build_metrics(registry: CollectorRegistry) -> Metrics:
@@ -123,6 +134,26 @@ def build_metrics(registry: CollectorRegistry) -> Metrics:
             "Database statement execution time in seconds.",
             ["query"],
             buckets=DB_LATENCY_BUCKETS,
+            registry=registry,
+        ),
+        cache_hits=Counter(
+            "cache_hits_total",
+            "Cache reads served from Redis.",
+            ["entity"],
+            registry=registry,
+        ),
+        cache_misses=Counter(
+            "cache_misses_total",
+            "Cache reads that fell through to the database.",
+            ["entity"],
+            registry=registry,
+        ),
+        # The degradation counter. This is the series that proves the cache is an
+        # optimization and not a dependency: it climbs while requests keep succeeding.
+        cache_errors=Counter(
+            "cache_errors_total",
+            "Cache operations that failed and were degraded around.",
+            ["operation"],
             registry=registry,
         ),
     )
@@ -161,6 +192,31 @@ def observe_request(
     metrics.requests.labels(route=route, method=method, status=str(status)).inc()
     # Clamp: a non-monotonic clock reading would otherwise poison the histogram sum.
     metrics.request_duration.labels(route=route, method=method).observe(max(duration_seconds, 0.0))
+
+
+def cache_entity(entity: Any) -> str:
+    """Bucket a cache entity into the closed label set."""
+    return entity if entity in CACHE_ENTITIES else "other"
+
+
+def cache_operation(operation: Any) -> str:
+    """Bucket a cache operation into the closed label set."""
+    return operation if operation in CACHE_OPERATIONS else "other"
+
+
+def observe_cache_hit(entity: str, *, metrics: Metrics = METRICS) -> None:
+    """Record one cache read served from Redis."""
+    metrics.cache_hits.labels(entity=cache_entity(entity)).inc()
+
+
+def observe_cache_miss(entity: str, *, metrics: Metrics = METRICS) -> None:
+    """Record one cache read that fell through to the database."""
+    metrics.cache_misses.labels(entity=cache_entity(entity)).inc()
+
+
+def observe_cache_error(operation: str, *, metrics: Metrics = METRICS) -> None:
+    """Record one degraded cache operation."""
+    metrics.cache_errors.labels(operation=cache_operation(operation)).inc()
 
 
 def observe_query(statement: Any, duration_seconds: float, *, metrics: Metrics = METRICS) -> None:

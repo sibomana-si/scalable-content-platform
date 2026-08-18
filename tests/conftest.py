@@ -19,9 +19,12 @@ from alembic import command
 from alembic.config import Config
 from fastapi import FastAPI
 from httpx import ASGITransport, AsyncClient
+from redis.asyncio import Redis
+from redis.exceptions import RedisError
 from sqlalchemy import select, text
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.client import get_redis
 from app.config import get_settings
 from app.core.security import create_access_token
 from app.db.session import get_engine, get_sessionmaker
@@ -108,6 +111,65 @@ async def clean_db(migrated_db: None) -> AsyncGenerator[None, None]:
     # test's role-seed downgrade (fk_users_role_id is ON DELETE RESTRICT).
     await _wipe()
     await get_engine().dispose()
+
+
+# --- Cache harness -------------------------------------------------------------------------
+#
+# Redis outlives a test. Without a wipe, a cached article from one test answers the next test's
+# read and the failure looks like a phantom — the row is gone from MySQL, yet the API returns it.
+# Scoped to the app's own key namespaces rather than FLUSHDB, so a shared local Redis keeps
+# whatever else is in it.
+
+CACHE_KEY_PATTERNS = ("article:*", "articles:list:*", "lock:*")
+
+
+async def wipe_cache() -> None:
+    """Delete every key this application owns. Silent when Redis is unreachable.
+
+    Opens its own client rather than the shared one. ``get_redis`` is ``lru_cache``d, so its
+    pool belongs to whichever event loop first used it; a later test on a new loop would find
+    that pool closed.
+    """
+    redis = Redis.from_url(
+        get_settings().redis_url,
+        decode_responses=True,
+        socket_timeout=2.0,
+        socket_connect_timeout=2.0,
+    )
+    try:
+        for pattern in CACHE_KEY_PATTERNS:
+            keys = [key async for key in redis.scan_iter(match=pattern, count=500)]
+            if keys:
+                await redis.delete(*keys)
+    except (RedisError, TimeoutError, OSError):
+        # A test that needs the cache gates on `redis_available`; the rest do not care.
+        pass
+    finally:
+        await redis.aclose()
+
+
+@pytest_asyncio.fixture(autouse=True)
+async def _reset_redis_client() -> AsyncGenerator[None, None]:
+    """Drop the shared Redis client after every test.
+
+    ``get_redis`` is ``lru_cache``d, so its connection pool belongs to whichever event loop
+    first used it. pytest-asyncio gives each test a new loop, so a client kept across tests
+    raises "attached to a different loop" from inside the next test's request — a failure
+    that names the middleware, not the cache. The same reasoning disposes the engine in
+    ``clean_db``.
+    """
+    yield
+    if get_redis.cache_info().currsize:
+        await get_redis().aclose()
+        get_redis.cache_clear()
+
+
+@pytest_asyncio.fixture
+async def clean_cache() -> AsyncGenerator[None, None]:
+    """Empty the application's cache keys around each test."""
+    await wipe_cache()
+    yield
+    await wipe_cache()
 
 
 @pytest_asyncio.fixture

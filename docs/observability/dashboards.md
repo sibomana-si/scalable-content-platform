@@ -1,6 +1,6 @@
 # Dashboards Catalog
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-12
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-17
 
 What each Grafana dashboard shows and how to read it.
 
@@ -13,15 +13,23 @@ and are provisioned read-only (`allowUiUpdates: false`), so the repo is the sour
 |---|---|---|---|---|---|
 | API Overview (RED) | `scp-api-overview` | Service health and the SLO view | Availability, request rate, error ratio (5xx/4xx), P50/P95/P99, P95 by route, status classes, CPU saturation, error budget consumed | `grafana/dashboards/api-overview.json` | ✅ M4 |
 | Database | `scp-database` | MySQL health | P95 SELECT latency, statements/s, statements **per request**, latency by statement type, read/write mix, share of request time in the DB | `grafana/dashboards/database.json` | ✅ M4 |
-| Cache | `scp-cache` | Redis effectiveness | _Pending_ — hit ratio, hits/misses by entity, fallback rate | `grafana/dashboards/cache.json` | ⏳ M5 |
+| Cache | `scp-cache` | Redis effectiveness | Hit ratio, degraded operations, hit ratio by entity, hits/misses by entity, degraded operations by type, database read rate | `grafana/dashboards/cache.json` | ✅ M5 |
 | Resilience | `scp-resilience` | Failure behavior | _Pending_ — timeouts, retries, circuit-breaker state, fallback rate | `grafana/dashboards/resilience.json` | ⏳ M7 |
 
-**Why two dashboards ship empty.** `cache_hits_total`/`cache_misses_total` land with the
-cache-aside read path (M5) and the resilience counters with the chaos work (M7). A panel querying
-a metric nobody exports renders `No data` indefinitely, which is indistinguishable from an
-outage — so each ships as a provisioned placeholder that states what it will contain and when.
-`tests/unit/test_dashboards.py` enforces both halves of that rule: no panel may query an
-unexported metric, and the two pending dashboards must say so.
+**Why one dashboard ships empty.** The resilience counters land with the chaos work (M7). A
+panel querying a metric nobody exports renders `No data` indefinitely, which is indistinguishable
+from an outage — so it ships as a provisioned placeholder that states what it will contain and
+when. `tests/unit/test_dashboards.py` enforces both halves of that rule: no panel may query an
+unexported metric, and a pending dashboard must say it is pending. Cache left this list in M5,
+when the cache-aside read path gave its panels something to query.
+
+**Reading the Cache dashboard.** Take the hit ratio and the degraded-operation rate together. A
+falling hit ratio with a flat error rate is a workload change. A falling hit ratio with a climbing
+error rate is a Redis problem. Judge the two entities separately: article detail carries the
+≥ 90% target, and unfiltered list pages bust on every write by design
+([ADR-0010](../architecture/adr/0010-generation-counter-list-invalidation.md)), so a low list
+ratio under a write-heavy load is expected.
+
 
 ## Conventions
 

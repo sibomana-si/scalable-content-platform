@@ -64,6 +64,7 @@ nav:
           - "0007 Single role FK": architecture/adr/0007-single-role-fk.md
           - "0008 Alembic migrations": architecture/adr/0008-alembic-migrations.md
           - "0009 Observability stack": architecture/adr/0009-observability-stack.md
+          - "0010 Generation counter invalidation": architecture/adr/0010-generation-counter-list-invalidation.md
           - Template: architecture/adr/template.md
   - API:
       - OpenAPI: api/openapi.md

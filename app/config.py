@@ -32,6 +32,20 @@ class Settings(BaseSettings):
     redis_socket_timeout: float = 2.0
     redis_socket_connect_timeout: float = 2.0
 
+    # --- Cache (cache-aside) ---
+    # The cache is an optimization, never a dependency. Set CACHE_ENABLED=false and the read
+    # path bypasses Redis completely — no connection, no keys — which is how the fall-through
+    # path gets exercised without stopping the container.
+    cache_enabled: bool = True
+    cache_article_ttl_seconds: int = 300
+    cache_list_ttl_seconds: int = 60
+    # Fraction of the TTL to spread entries over. A fixed TTL expires a whole generation of
+    # keys in one instant and every reader misses together.
+    cache_ttl_jitter: float = 0.2
+    # How long a single-flight lock is held, and how long a loser waits before it gives up and
+    # reads the database itself. A slow loader must cost a duplicate query, never a hung request.
+    cache_lock_timeout_seconds: float = 2.0
+
     # --- Auth (JWT) ---
     # SecretStr keeps the signing key out of repr()/logs; read it via require_signing_key().
     jwt_secret: SecretStr = SecretStr("")

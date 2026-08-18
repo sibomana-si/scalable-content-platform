@@ -18,6 +18,10 @@ sequenceDiagram
     A-->>C: 200 OK
     Note over C,A: request_id correlates logs / metrics / traces
 
+    rect rgb(240, 245, 255)
+        Note over A,R: List pages take the same path under a key that embeds<br/>a generation counter: articles:list:g{gen}:... — a write<br/>advances the counter and every old page key goes<br/>unreachable in O(1). See ADR-0010.
+    end
+
     rect rgb(255, 240, 240)
-        Note over A,R: Redis unavailable → skip cache,<br/>read MySQL directly (degraded latency, correct data)
+        Note over A,R: Redis unavailable → skip cache,<br/>read MySQL directly (degraded latency, correct data).<br/>One failure latches the rest of the request's cache<br/>work off, so a blackholed Redis costs one timeout, not four.
     end

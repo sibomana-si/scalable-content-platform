@@ -1,6 +1,6 @@
 # Observability Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-17
 
 Covers the three pillars: logs, metrics, traces. Correlate all three via a shared `request_id`.
 
@@ -54,7 +54,8 @@ Follow the **RED** method for the API and **USE** for resources.
 |---|---|---|---|---|
 | `http_requests_total` | counter | `route`, `method`, `status` | Rate & errors | ✅ M4 |
 | `http_request_duration_seconds` | histogram | `route`, `method` | P50/P95 latency | ✅ M4 |
-| `cache_hits_total` / `cache_misses_total` | counter | `entity` | Hit ratio | ⏳ M5 |
+| `cache_hits_total` / `cache_misses_total` | counter | `entity` (`article`, `list`) | Hit ratio, per entity | ✅ M5 |
+| `cache_errors_total` | counter | `operation` (`get`, `set`, `delete`, `incr`, `lock`) | Cache degradation: climbs while requests still succeed | ✅ M5 |
 | `db_query_duration_seconds` | histogram | `query` | DB bottlenecks | ✅ M4 |
 
 - Exposed at `GET /metrics`, unauthenticated (ADR-0009). The endpoint excludes itself from
