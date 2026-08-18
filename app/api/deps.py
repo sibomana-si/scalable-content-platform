@@ -5,6 +5,9 @@ from typing import Annotated
 from fastapi import Depends, Request
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.cache.article_cache import ArticleCache
+from app.cache.client import get_redis
+from app.config import get_settings
 from app.db.session import get_session
 from app.models import User
 from app.repositories.article_repo import ArticleRepository
@@ -36,7 +39,16 @@ CurrentUser = Annotated[User, Depends(get_current_user)]
 
 
 def get_article_service(session: SessionDep) -> ArticleService:
-    return ArticleService(ArticleRepository(session))
+    settings = get_settings()
+    cache = ArticleCache(get_redis(), enabled=settings.cache_enabled)
+    return ArticleService(
+        ArticleRepository(session),
+        cache,
+        article_ttl_seconds=settings.cache_article_ttl_seconds,
+        list_ttl_seconds=settings.cache_list_ttl_seconds,
+        ttl_jitter=settings.cache_ttl_jitter,
+        lock_timeout_seconds=settings.cache_lock_timeout_seconds,
+    )
 
 
 ArticleServiceDep = Annotated[ArticleService, Depends(get_article_service)]

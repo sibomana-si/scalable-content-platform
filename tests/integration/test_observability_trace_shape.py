@@ -47,20 +47,34 @@ def by_name(exporter: InMemorySpanExporter) -> dict[str, ReadableSpan]:
     return {span.name: span for span in exporter.get_finished_spans()}
 
 
-def db_span(exporter: InMemorySpanExporter, parent: ReadableSpan) -> ReadableSpan:
-    """The statement span issued by ``parent``.
+def child_spans(
+    exporter: InMemorySpanExporter, parent: ReadableSpan, system: str
+) -> list[ReadableSpan]:
+    """Statement spans of one backend issued by ``parent``.
 
     Filtering on the parent matters: the test fixtures also clean the tables through the same
     instrumented engine, and the pool's ``connect`` span carries ``db.system`` with no
-    statement of its own.
+    statement of its own. Filtering on ``db.system`` matters too — the read path is
+    cache-aside, so a domain span now has Redis children as well as MySQL ones.
     """
-    return next(
+    return [
         span
         for span in exporter.get_finished_spans()
         if (span.attributes or {}).get("db.statement")
+        and (span.attributes or {}).get("db.system") == system
         and span.parent is not None
         and span.parent.span_id == parent.context.span_id
-    )
+    ]
+
+
+def db_span(exporter: InMemorySpanExporter, parent: ReadableSpan) -> ReadableSpan:
+    """The MySQL statement span issued by ``parent``."""
+    return child_spans(exporter, parent, "mysql")[0]
+
+
+def cache_span(exporter: InMemorySpanExporter, parent: ReadableSpan) -> ReadableSpan:
+    """The Redis command span issued by ``parent``."""
+    return child_spans(exporter, parent, "redis")[0]
 
 
 async def test_a_read_produces_a_server_domain_and_db_span(
@@ -74,6 +88,8 @@ async def test_a_read_produces_a_server_domain_and_db_span(
     assert "GET /v1/articles" in spans  # auto-instrumented HTTP server span
     assert "articles.list" in spans  # domain span, <component>.<operation>
     assert db_span(exporter, spans["articles.list"]).attributes["db.system"] == "mysql"  # type: ignore[index]
+    # The NFR asks for DB and cache spans; a cache-aside read produces both.
+    assert cache_span(exporter, spans["articles.list"]).attributes["db.system"] == "redis"  # type: ignore[index]
 
 
 async def test_the_spans_nest_into_a_single_trace(
@@ -90,8 +106,22 @@ async def test_the_spans_nest_into_a_single_trace(
     assert {s.context.trace_id for s in (server, domain, db)} == {server.context.trace_id}
 
 
+async def test_a_cache_hit_produces_no_database_span(
+    client: AsyncClient, clean_db: None, clean_cache: None, exporter: InMemorySpanExporter
+) -> None:
+    """What the cache is for, read off the trace: the second request never reaches MySQL."""
+    await client.get("/v1/articles?limit=5")
+    exporter.clear()
+
+    await client.get("/v1/articles?limit=5")
+
+    domain = by_name(exporter)["articles.list"]
+    assert child_spans(exporter, domain, "mysql") == []
+    assert child_spans(exporter, domain, "redis")
+
+
 async def test_the_db_span_carries_parameterised_sql_not_literals(
-    client: AsyncClient, clean_db: None, exporter: InMemorySpanExporter
+    client: AsyncClient, clean_db: None, clean_cache: None, exporter: InMemorySpanExporter
 ) -> None:
     await client.get("/v1/articles?limit=5")
 

@@ -7,6 +7,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Redis cache-aside on the article read path (M5): `GET /v1/articles/{id}` and the list endpoint
+  check Redis first and populate it on a miss, under a TTL with jitter (300s for a body, 60s for
+  a page, +/- 20%). List page keys embed a generation counter — one global, one per author — so a
+  write invalidates every page it can affect with a single `INCR`, with no `SCAN` and no key
+  registry (ADR-0010). Concurrent misses on one key are coalesced by a `SET NX` single-flight
+  lock, and a loser that waits out its budget reads MySQL itself rather than hanging.
+  Authorization and compare-and-set never read the cache: `ArticleService.get` is cache-aside and
+  `_load` always reads MySQL, so a stale `author_id` cannot decide ownership and a stale
+  `updated_at` cannot become the CAS token. The cache is an optimization and never a dependency —
+  every operation catches `RedisError`/`TimeoutError`, counts it, and degrades — and one failure
+  latches the rest of that request's cache work off, so a blackholed Redis costs one socket
+  timeout rather than four (8s -> 2s, measured). `CACHE_ENABLED=false` bypasses Redis entirely.
+  New metrics `cache_hits_total{entity}`, `cache_misses_total{entity}` and
+  `cache_errors_total{operation}`, all on closed label sets, plus the Cache Grafana dashboard
+  that replaces the M5 placeholder.
 - Walking skeleton: `create_app()` factory, lazy async DB/Redis clients, and `/health/live` +
   `/health/ready` Kubernetes probe endpoints.
 - Article CRUD endpoints (FR-004) under `/v1/articles` with the canonical error envelope
