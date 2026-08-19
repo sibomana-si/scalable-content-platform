@@ -16,6 +16,7 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import get_settings
+from app.db.after_commit import discard_after_commit, drain_after_commit
 from app.observability.metrics import attach_query_metrics
 
 
@@ -49,7 +50,18 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     with ``scope="function"``. FastAPI's default for a dependency with yield is
     ``scope="request"``, which runs teardown after the response has been sent to the
     client — the write would then be announced before it was durable.
+
+    After the commit, the after-commit queue drains. Cache invalidation registers there
+    rather than running inline, because an inline ``DEL`` would run before the row was
+    durable and a concurrent reader could repopulate the cache with the pre-commit value.
+    A rollback discards the queue instead: no commit, no new value, nothing to invalidate to.
     """
 
-    async with get_sessionmaker()() as session, session.begin():
-        yield session
+    async with get_sessionmaker()() as session:
+        try:
+            async with session.begin():
+                yield session
+        except BaseException:
+            discard_after_commit(session)
+            raise
+        await drain_after_commit(session)

@@ -1,6 +1,6 @@
 # Caching Strategy
 
-> **Status:** ✅ Implemented · **Owner:** Simon Sibomana · **Last updated:** 2026-08-17
+> **Status:** ✅ Implemented · **Owner:** Simon Sibomana · **Last updated:** 2026-08-19
 
 Redis cache-aside for hot reads, with invalidation on writes. The cache is an optimization and
 never a dependency: every path degrades to MySQL. See
@@ -61,6 +61,15 @@ for the arithmetic and the rejected alternatives.
 commits in its teardown, so an inline invalidation would run before the row is durable. A
 concurrent reader could then miss, read the pre-commit row, and repopulate the cache with the old
 value — which would survive its full TTL, with no error and no metric.
+
+So a write registers its invalidation on a per-session queue (`app/db/after_commit.py`), and
+`get_session` drains the queue once the transaction block exits cleanly. A rollback discards it:
+no commit, no new value, nothing to invalidate to. A failed callback is logged and skipped —
+the commit already succeeded, and turning a cache error into a 500 would trade a slow read for a
+lost write.
+
+The ordering is pinned by `tests/integration/test_invalidation_ordering.py`, which asserts that a
+second connection can already see the row when the callback runs.
 
 ## Failure and degradation
 
