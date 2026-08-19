@@ -14,11 +14,13 @@ that one rule.
 import asyncio
 import json
 from datetime import datetime
+from typing import Any
 
 from pydantic import ValidationError
 
 from app.cache.article_cache import ArticleCache
 from app.cache.keys import article_key, cursor_parts, jittered_ttl, list_key
+from app.db.after_commit import after_commit
 from app.models import Article, User
 from app.observability.tracing import traced
 from app.repositories.article_repo import ArticleRepository
@@ -40,6 +42,7 @@ class ArticleService:
         articles: ArticleRepository,
         cache: ArticleCache | None = None,
         *,
+        session: Any | None = None,
         article_ttl_seconds: int = 300,
         list_ttl_seconds: int = 60,
         ttl_jitter: float = 0.2,
@@ -47,6 +50,7 @@ class ArticleService:
     ) -> None:
         self._articles = articles
         self._cache = cache or _NO_CACHE
+        self._session = session
         self._article_ttl = article_ttl_seconds
         self._list_ttl = list_ttl_seconds
         self._jitter = ttl_jitter
@@ -56,6 +60,9 @@ class ArticleService:
         async with traced("articles", "create", author_id=actor.id):
             # Authorship comes from the authenticated actor, never from the payload.
             article = await self._articles.create(author_id=actor.id, title=title, body=body)
+            # A new article has no cached body of its own — only the pages that must now
+            # include it.
+            self._invalidate_after_commit(author_id=actor.id)
             return ArticleOut.model_validate(article)
 
     async def get(self, article_id: int) -> ArticleOut:
@@ -129,11 +136,16 @@ class ArticleService:
         async with traced("articles", "update", article_id=article_id):
             article = await self._load(article_id)  # 404 for missing/soft-deleted, never cached
             self._authorize(actor, article)
+            # Read the author before the CAS. update_cas expires the identity map, so touching
+            # the attribute afterwards triggers a lazy reload — synchronous I/O outside the
+            # greenlet context, which raises MissingGreenlet rather than returning a value.
+            author_id = article.author_id
             rowcount = await self._articles.update_cas(
                 article_id, expected_updated_at, title=title, body=body
             )
             if rowcount == 0:
                 await self._raise_conflict_or_not_found(article_id)
+            self._invalidate_after_commit(article_id=article_id, author_id=author_id)
             # Re-read from the database: MySQL advanced updated_at server-side.
             return ArticleOut.model_validate(await self._load(article_id))
 
@@ -141,9 +153,32 @@ class ArticleService:
         async with traced("articles", "delete", article_id=article_id):
             article = await self._load(article_id)
             self._authorize(actor, article)
+            author_id = article.author_id  # before the CAS expires the identity map
             rowcount = await self._articles.soft_delete_cas(article_id, expected_updated_at)
             if rowcount == 0:
                 await self._raise_conflict_or_not_found(article_id)
+            self._invalidate_after_commit(article_id=article_id, author_id=author_id)
+
+    def _invalidate_after_commit(self, *, author_id: int, article_id: int | None = None) -> None:
+        """Queue this write's invalidation to run once the transaction commits.
+
+        Never inline. ``get_session`` commits in its teardown, so an inline ``DEL`` would run
+        before the row is durable: a concurrent reader could miss, read the pre-commit row,
+        and repopulate the cache with the old value, which would then survive its full TTL
+        with no error and no metric.
+
+        The author is the article's, not the actor's. An admin editing someone else's article
+        changes that author's pages, so that is the counter to move.
+        """
+        if self._session is None:
+            return
+
+        async def invalidate() -> None:
+            if article_id is not None:
+                await self._cache.invalidate_article(article_id)
+            await self._cache.bump_generations(author_id=author_id)
+
+        after_commit(self._session, invalidate)
 
     async def _load(self, article_id: int) -> Article:
         """Read one live article from the database. Never consults the cache."""

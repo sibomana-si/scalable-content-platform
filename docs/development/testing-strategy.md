@@ -1,6 +1,6 @@
 # Testing Strategy & TDD Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-19
 
 How this project writes tests — and, more importantly, **when**: tests are written *before* the code
 they verify. This document is the practical companion to two requirements that already exist:
@@ -43,7 +43,8 @@ FR list directly.
 | FR-001 Registration | `tests/acceptance/test_fr001_registration.py` | Auth router + service, password policy (D6) |
 | FR-002 Login (JWT) | `tests/acceptance/test_fr002_login.py` | Token issue, 15-min TTL (D1), no user enumeration |
 | FR-003 RBAC | `tests/acceptance/test_fr003_rbac.py` | 401-before-403 ordering, public-read bypass |
-| FR-004 Article CRUD | `tests/acceptance/test_fr004_articles.py` | Ownership, PUT full-replace (D10), optimistic concurrency `409` (D11), soft delete (D3), cache invalidation |
+| FR-004 Article CRUD | `tests/acceptance/test_articles.py` | Ownership, PUT full-replace (D10), optimistic concurrency `409` (D11), soft delete (D3) |
+| FR-004 Cache-aside reads | `tests/acceptance/test_fr004_cache.py` | Hit and miss counted on `/metrics`, cached body byte-identical, cursor round trip, read-your-writes after update and delete, a write by one author spares another author's page, a Redis failure during invalidation still returns 201 |
 | FR-005 Paginated reads | `tests/acceptance/test_fr005_pagination.py` | Keyset cursor (D9), `author` filter (D7), bounded page size |
 | FR-006 Retention purge | `tests/acceptance/test_fr006_purge.py` | Idempotency, retention-window boundary, untouched live rows |
 

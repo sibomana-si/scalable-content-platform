@@ -151,3 +151,123 @@ async def test_reads_succeed_with_the_cache_disabled(app, article_factory, monke
 
     assert response.status_code == 200
     assert response.json()["id"] == article.id
+
+
+# --- read-your-writes through the cache -------------------------------------------------------
+
+
+async def test_a_read_after_an_update_returns_the_new_body(
+    client, user_factory, article_factory, auth_headers
+):
+    """The stale read the invalidation exists to prevent, over the real HTTP path."""
+    user = await user_factory()
+    article = await article_factory(author=user)
+    await client.get(f"{BASE}/{article.id}")  # populate the cache
+
+    await client.put(
+        f"{BASE}/{article.id}",
+        json=PAYLOAD,
+        headers={**auth_headers(user), "If-Match": article.updated_at.isoformat()},
+    )
+
+    after = await client.get(f"{BASE}/{article.id}")
+    assert after.json()["title"] == PAYLOAD["title"]
+
+
+async def test_a_read_after_a_delete_is_a_404_not_a_cached_200(
+    client, user_factory, article_factory, auth_headers
+):
+    user = await user_factory()
+    article = await article_factory(author=user)
+    await client.get(f"{BASE}/{article.id}")
+
+    await client.delete(
+        f"{BASE}/{article.id}",
+        headers={**auth_headers(user), "If-Match": article.updated_at.isoformat()},
+    )
+
+    assert (await client.get(f"{BASE}/{article.id}")).status_code == 404
+
+
+async def test_a_list_read_after_a_create_includes_the_new_article(
+    client, user_factory, article_factory, auth_headers
+):
+    """A create has no article key to delete, so only the generation bump can save this."""
+    user = await user_factory()
+    await article_factory(author=user)
+    before = await client.get(BASE)
+    assert len(before.json()["items"]) == 1
+
+    await client.post(BASE, json=PAYLOAD, headers=auth_headers(user))
+
+    after = await client.get(BASE)
+    assert len(after.json()["items"]) == 2
+
+
+async def test_a_list_read_after_a_delete_drops_the_article(
+    client, user_factory, article_factory, auth_headers
+):
+    user = await user_factory()
+    article = await article_factory(author=user)
+    await client.get(BASE)  # populate
+
+    await client.delete(
+        f"{BASE}/{article.id}",
+        headers={**auth_headers(user), "If-Match": article.updated_at.isoformat()},
+    )
+
+    assert (await client.get(BASE)).json()["items"] == []
+
+
+async def test_a_cached_author_page_survives_a_write_by_a_different_author(
+    client, user_factory, article_factory, auth_headers
+):
+    """The property the per-author generation buys, over HTTP.
+
+    Author A's page must still be served from the cache after author B writes — and it must
+    still be correct, because B's article was never in A's page.
+    """
+    author = await user_factory()
+    other = await user_factory()
+    await article_factory(author=author)
+    cached = await client.get(BASE, params={"author": author.id})
+    hits_before = await counter(client, "cache_hits_total", "list")
+
+    await client.post(BASE, json=PAYLOAD, headers=auth_headers(other))
+
+    after = await client.get(BASE, params={"author": author.id})
+    assert after.json() == cached.json()
+    assert await counter(client, "cache_hits_total", "list") == hits_before + 1
+
+
+async def test_an_unfiltered_page_is_rebuilt_after_any_write(
+    client, user_factory, article_factory, auth_headers
+):
+    """The accepted cost of the global counter, stated as a test rather than as prose."""
+    author = await user_factory()
+    other = await user_factory()
+    await article_factory(author=author)
+    await client.get(BASE)
+    misses_before = await counter(client, "cache_misses_total", "list")
+
+    await client.post(BASE, json=PAYLOAD, headers=auth_headers(other))
+
+    await client.get(BASE)
+    assert await counter(client, "cache_misses_total", "list") == misses_before + 1
+
+
+async def test_a_write_still_succeeds_when_the_cache_cannot_be_invalidated(
+    client, user_factory, auth_headers, monkeypatch
+):
+    """The commit already happened. A Redis failure must not turn a 201 into a 500."""
+    from app.cache.article_cache import ArticleCache
+
+    async def boom(self, *args, **kwargs):
+        raise ConnectionError("redis is down")
+
+    user = await user_factory()
+    monkeypatch.setattr(ArticleCache, "bump_generations", boom)
+
+    response = await client.post(BASE, json=PAYLOAD, headers=auth_headers(user))
+
+    assert response.status_code == 201

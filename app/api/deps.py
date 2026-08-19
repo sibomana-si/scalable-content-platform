@@ -44,6 +44,7 @@ def get_article_service(session: SessionDep) -> ArticleService:
     return ArticleService(
         ArticleRepository(session),
         cache,
+        session=session,
         article_ttl_seconds=settings.cache_article_ttl_seconds,
         list_ttl_seconds=settings.cache_list_ttl_seconds,
         ttl_jitter=settings.cache_ttl_jitter,

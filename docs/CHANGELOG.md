@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Cache invalidation on write (M5): a create advances both list generations, and an update or
+  delete also drops the cached article body. The author whose counter moves is the article's, not
+  the actor's, so an admin editing someone else's article invalidates the right pages. A write by
+  one author leaves every other author's cached pages addressable.
+  **Invalidation runs after the commit, never inline.** `get_session` commits in its teardown, so
+  an inline `DEL` would run before the row was durable: a concurrent reader could miss, read the
+  pre-commit row, and repopulate the cache with the old value, which would then survive its full
+  TTL with no error and no metric. Writes now register their invalidation on a per-session queue
+  (`app/db/after_commit.py`) that `get_session` drains once the transaction block exits cleanly,
+  and discards on rollback — so a 403, a 409, or any raised handler invalidates nothing.
+  Invalidation is fail-open: the commit already succeeded, so a Redis failure is counted and
+  logged, and the client still gets its 201.
 - Redis cache-aside on the article read path (M5): `GET /v1/articles/{id}` and the list endpoint
   check Redis first and populate it on a miss, under a TTL with jitter (300s for a body, 60s for
   a page, +/- 20%). List page keys embed a generation counter — one global, one per author — so a
