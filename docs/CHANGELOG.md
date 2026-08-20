@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Bounded MySQL and Redis connection pools (M5). The engine set `pool_size` and nothing else, so
+  overflow, the pool wait, and connection recycling all ran on library defaults while the capacity
+  model's replica-ceiling arithmetic already assumed 10/5. Adds `DB_MAX_OVERFLOW` (5),
+  `DB_POOL_TIMEOUT` (10s) and `DB_POOL_RECYCLE` (1800s), plus `REDIS_MAX_CONNECTIONS` (50) because
+  redis-py grows its pool without limit. Every bound makes a failure bounded: an unbounded pool
+  wait turns one slow query into a total stall, since every later request queues behind it and
+  nothing ever fails, so nothing ever alerts. The settings builders reject the unbounded forms
+  outright — a zero `pool_timeout`, a negative `max_overflow` — because SQLAlchemy reads both as
+  "no limit", so a typo in an env var would silently remove the ceiling. New
+  `db_pool_connections{state}` gauge, sampled at scrape time rather than per request, with pool
+  and utilization panels on the Database dashboard. `tests/unit/test_capacity_model.py` runs the
+  document's own arithmetic against the shipped defaults, so the two cannot drift.
 - Cache invalidation on write (M5): a create advances both list generations, and an update or
   delete also drops the cached article body. The author whose counter moves is the article's, not
   the actor's, so an admin editing someone else's article invalidates the right pages. A write by

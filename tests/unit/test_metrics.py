@@ -6,7 +6,7 @@ that leaked across tests would make assertions order-dependent.
 """
 
 import pytest
-from prometheus_client import CollectorRegistry
+from prometheus_client import CollectorRegistry, generate_latest
 
 from app.observability.context import UNMATCHED_ROUTE
 from app.observability.metrics import (
@@ -18,6 +18,7 @@ from app.observability.metrics import (
     observe_cache_miss,
     observe_query,
     observe_request,
+    register_pool_metrics,
     render_metrics,
     route_label,
     sql_operation,
@@ -268,3 +269,122 @@ def test_cache_error_counts_under_its_operation(metrics: Metrics) -> None:
 
     assert cache_counter(metrics, "cache_errors_total", {"operation": "get"}) == 2.0
     assert cache_counter(metrics, "cache_errors_total", {"operation": "set"}) == 1.0
+
+
+# --- pool metrics ------------------------------------------------------------------------------
+
+
+class FakePool:
+    """Stands in for a SQLAlchemy QueuePool: only the four counters are read."""
+
+    def __init__(self, size=10, checkedin=7, checkedout=3, overflow=-5) -> None:
+        self._size, self._in, self._out, self._overflow = size, checkedin, checkedout, overflow
+
+    def size(self) -> int:
+        return self._size
+
+    def checkedin(self) -> int:
+        return self._in
+
+    def checkedout(self) -> int:
+        return self._out
+
+    def overflow(self) -> int:
+        return self._overflow
+
+
+class FakeEngine:
+    def __init__(self, pool=None) -> None:
+        self.pool = pool or FakePool()
+
+
+def gauge(registry, state: str) -> float | None:
+    return registry.get_sample_value("db_pool_connections", {"state": state})
+
+
+def test_the_pool_collector_exports_the_three_states() -> None:
+    registry = CollectorRegistry()
+    register_pool_metrics(registry, lambda: FakeEngine())
+
+    assert gauge(registry, "in_use") == 3.0
+    assert gauge(registry, "available") == 7.0
+    assert gauge(registry, "overflow") == 0.0  # -5 means five unused overflow slots
+
+
+def test_the_pool_state_label_is_a_closed_set() -> None:
+    registry = CollectorRegistry()
+    register_pool_metrics(registry, lambda: FakeEngine())
+    states = {
+        sample.labels["state"]
+        for metric in registry.collect()
+        for sample in metric.samples
+        if sample.name == "db_pool_connections"
+    }
+
+    assert states == {"in_use", "available", "overflow"}
+
+
+def test_overflow_reports_the_slots_actually_in_use() -> None:
+    """SQLAlchemy's overflow() counts from -max_overflow, so a raw read is misleading."""
+
+    registry = CollectorRegistry()
+    register_pool_metrics(registry, lambda: FakeEngine(FakePool(overflow=2)))
+
+    assert gauge(registry, "overflow") == 2.0
+
+
+def test_the_collector_samples_at_scrape_time_not_at_registration() -> None:
+    """Sampling per request would put work on the hot path for a number nobody reads between
+    scrapes."""
+
+    pool = FakePool(checkedout=1)
+    registry = CollectorRegistry()
+    register_pool_metrics(registry, lambda: FakeEngine(pool))
+    assert gauge(registry, "in_use") == 1.0
+
+    pool._out = 9
+
+    assert gauge(registry, "in_use") == 9.0
+
+
+def test_an_unreachable_engine_exports_nothing_rather_than_failing_the_scrape() -> None:
+    """A broken pool must not take /metrics down with it — that is when it is needed most."""
+
+    def boom():
+        raise RuntimeError("no engine")
+
+    registry = CollectorRegistry()
+    register_pool_metrics(registry, boom)
+
+    assert gauge(registry, "in_use") is None
+    assert generate_latest(registry) is not None
+
+
+def test_registering_the_collector_never_calls_the_engine_factory() -> None:
+    """Registration must not sample.
+
+    ``CollectorRegistry.register`` discovers metric names by calling ``describe()``, or by
+    falling back to ``collect()`` when a collector does not define one. That fallback
+    deadlocked: ``get_engine`` is ``lru_cache``d and registered the collector from inside its
+    own body, so the sample re-entered a function that had not returned yet.
+    """
+
+    calls = []
+
+    def factory():
+        calls.append(1)
+        return FakeEngine()
+
+    register_pool_metrics(CollectorRegistry(), factory)
+
+    assert calls == []
+
+
+def test_registering_twice_adds_one_collector() -> None:
+    """`get_engine` may run again after a dispose; a second registration must not raise."""
+
+    registry = CollectorRegistry()
+    register_pool_metrics(registry, lambda: FakeEngine())
+    register_pool_metrics(registry, lambda: FakeEngine())
+
+    assert gauge(registry, "in_use") == 3.0

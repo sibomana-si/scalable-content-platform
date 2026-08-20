@@ -352,3 +352,12 @@ def test_the_documented_runbooks_all_have_a_rule() -> None:
     alerted = {rule["alert"] for rule in alert_rules()}
 
     assert {"HighReadLatencyP95", "ElevatedErrorRate", "TargetDown"} <= alerted
+
+
+def test_the_database_dashboard_shows_the_connection_pool() -> None:
+    """M5 bounded the pool; an operator needs to see how close it is to its ceiling."""
+
+    dashboard = dict(dashboards())["database.json"]
+    expressions = " ".join(expr for _, expr in panel_expressions(dashboard))
+
+    assert "db_pool_connections" in expressions

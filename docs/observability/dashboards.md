@@ -1,6 +1,6 @@
 # Dashboards Catalog
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-17
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-20
 
 What each Grafana dashboard shows and how to read it.
 
@@ -12,7 +12,7 @@ and are provisioned read-only (`allowUiUpdates: false`), so the repo is the sour
 | Dashboard | uid | Purpose | Key panels | JSON model | Status |
 |---|---|---|---|---|---|
 | API Overview (RED) | `scp-api-overview` | Service health and the SLO view | Availability, request rate, error ratio (5xx/4xx), P50/P95/P99, P95 by route, status classes, CPU saturation, error budget consumed | `grafana/dashboards/api-overview.json` | ✅ M4 |
-| Database | `scp-database` | MySQL health | P95 SELECT latency, statements/s, statements **per request**, latency by statement type, read/write mix, share of request time in the DB | `grafana/dashboards/database.json` | ✅ M4 |
+| Database | `scp-database` | MySQL health | P95 SELECT latency, statements/s, statements **per request**, latency by statement type, read/write mix, share of request time in the DB, connection pool by state, pool utilization | `grafana/dashboards/database.json` | ✅ M4 (pool panels M5) |
 | Cache | `scp-cache` | Redis effectiveness | Hit ratio, degraded operations, hit ratio by entity, hits/misses by entity, degraded operations by type, database read rate | `grafana/dashboards/cache.json` | ✅ M5 |
 | Resilience | `scp-resilience` | Failure behavior | _Pending_ — timeouts, retries, circuit-breaker state, fallback rate | `grafana/dashboards/resilience.json` | ⏳ M7 |
 
