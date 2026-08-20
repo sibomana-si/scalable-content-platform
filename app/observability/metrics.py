@@ -25,6 +25,8 @@ from prometheus_client import (
     disable_created_metrics,
     generate_latest,
 )
+from prometheus_client.core import GaugeMetricFamily
+from prometheus_client.registry import Collector
 from sqlalchemy import event
 
 from app.observability.context import route_template
@@ -229,6 +231,63 @@ def observe_query(statement: Any, duration_seconds: float, *, metrics: Metrics =
 def render_metrics(*, metrics: Metrics = METRICS) -> tuple[bytes, str]:
     """The exposition payload and the content type Prometheus needs to parse it."""
     return generate_latest(metrics.registry), CONTENT_TYPE_LATEST
+
+
+# The only values the ``state`` label may take.
+POOL_STATES = ("in_use", "available", "overflow")
+
+
+class _PoolCollector(Collector):
+    """Reads the connection pool at scrape time.
+
+    Sampling on scrape rather than per request keeps the counters off the hot path: nothing
+    reads them between scrapes, so per-request bookkeeping would be work nobody uses.
+
+    The engine is passed as a callable because it is built lazily; resolving it at
+    registration would open a pool at import.
+    """
+
+    def __init__(self, engine_factory: Any) -> None:
+        self._engine_factory = engine_factory
+
+    def describe(self) -> Any:
+        """Name the metric without sampling it.
+
+        Required, not optional. ``CollectorRegistry.register`` discovers names by calling
+        ``describe()`` and falls back to ``collect()`` when a collector does not define one —
+        which samples the pool at registration time, from inside whatever is registering.
+        """
+        yield GaugeMetricFamily(
+            "db_pool_connections", "Database connections by pool state.", labels=["state"]
+        )
+
+    def collect(self) -> Any:
+        try:
+            pool = self._engine_factory().pool
+            in_use = pool.checkedout()
+            available = pool.checkedin()
+            # SQLAlchemy counts overflow from -max_overflow upward, so a negative value means
+            # unused slots. Reporting the raw number would graph a healthy pool as negative.
+            overflow = max(0, pool.overflow())
+        except Exception:  # noqa: BLE001 — a broken pool must not take /metrics down with it
+            return
+
+        gauge = GaugeMetricFamily(
+            "db_pool_connections",
+            "Database connections by pool state.",
+            labels=["state"],
+        )
+        for state, value in zip(POOL_STATES, (in_use, available, overflow), strict=True):
+            gauge.add_metric([state], value)
+        yield gauge
+
+
+def register_pool_metrics(registry: CollectorRegistry, engine_factory: Any) -> None:
+    """Export ``db_pool_connections{state}`` from ``engine_factory()``'s pool. Idempotent."""
+    for collector in list(getattr(registry, "_collector_to_names", {})):
+        if isinstance(collector, _PoolCollector):
+            return
+    registry.register(_PoolCollector(engine_factory))
 
 
 _QUERY_START_KEY = "_metrics_query_started"

@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-14
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-20
 
 Every environment variable: name, purpose, default, required. Mirror in `.env.example`.
 
@@ -15,11 +15,15 @@ Every environment variable: name, purpose, default, required. Mirror in `.env.ex
 | `MYSQL_DB` | Database name | — | Yes |
 | `MYSQL_USER` | DB user | — | Yes |
 | `MYSQL_PASSWORD` | DB password (secret) | — | Yes |
-| `DB_POOL_SIZE` | Connection pool size | `10` | No |
+| `DB_POOL_SIZE` | Connections kept open per replica | `10` | No |
+| `DB_MAX_OVERFLOW` | Extra connections allowed above the pool size under load. The capacity model's replica ceiling assumes 10/5 | `5` | No |
+| `DB_POOL_TIMEOUT` | Seconds a request waits for a connection before it fails. Never unbounded: an open wait turns one slow query into a total stall | `10.0` | No |
+| `DB_POOL_RECYCLE` | Seconds before an idle connection is replaced. Proxies drop idle connections long before MySQL's `wait_timeout` (28800s), and a recycled connection avoids "server has gone away" | `1800` | No |
 | `READINESS_TIMEOUT_SECONDS` | Per-dependency ceiling for `/health/ready`. Kubernetes' probe `timeoutSeconds` should be ≥ this | `2.0` | No |
 | `REDIS_URL` | Redis connection URL | — | Yes |
 | `REDIS_SOCKET_TIMEOUT` | Per-command socket timeout (seconds). The library default is unbounded, which turns a blackholed Redis into an indefinite wait for every caller | `2.0` | No |
 | `REDIS_SOCKET_CONNECT_TIMEOUT` | Connect timeout (seconds), same reasoning | `2.0` | No |
+| `REDIS_MAX_CONNECTIONS` | Pool ceiling. redis-py grows its pool without limit, so a stalled server would open a socket per waiting caller | `50` | No |
 | `CACHE_ENABLED` | Cache-aside master switch. `false` bypasses Redis completely — no connection, no keys — and every read goes to MySQL | `true` | No |
 | `CACHE_ARTICLE_TTL_SECONDS` | TTL for a cached article body | `300` | No |
 | `CACHE_LIST_TTL_SECONDS` | TTL for a cached list page. Shorter than an article TTL: pages go stale faster than rows | `60` | No |

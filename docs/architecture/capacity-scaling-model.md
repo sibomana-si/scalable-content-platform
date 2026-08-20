@@ -1,6 +1,6 @@
 # Capacity & Scaling Model
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-20
 
 Back-of-the-envelope sizing that justifies the scaling claims. These are **planning numbers, not
 commitments** — each is validated (or corrected) by the M6 load test, and this document is updated
@@ -39,6 +39,10 @@ fall-through case must be load-tested at M6, and load shedding exists for exactl
 
 ### Connection pooling
 
+**Status:** implemented at M5. The pool settings below are the shipped defaults in
+`app/config.py`, and ``tests/unit/test_capacity_model.py`` runs this arithmetic against them,
+so the code and this document cannot drift apart.
+
 Total connections must stay within MySQL's limit as replicas scale
 ([NFR](../requirements/non-functional-requirements.md)):
 
@@ -59,7 +63,23 @@ migrations, and operator sessions:
 
 Beyond ~8 replicas, either shrink per-replica pools, raise `max_connections` (with memory care), or
 front MySQL with a proxy/pooler (ProxySQL) — see bottleneck B3 below. Redis connections are far
-lighter (default `maxclients` 10,000) and do not constrain replica count at this scale.
+lighter (default `maxclients` 10,000) and do not constrain replica count at this scale, but the
+pool is capped at `REDIS_MAX_CONNECTIONS` (default 50) anyway: redis-py grows its pool without
+limit, so a stalled server would open a socket for every waiting caller.
+
+Every bound makes a failure bounded.**`DB_POOL_TIMEOUT` (10s) is the one that matters most: an
+unbounded pool wait turns one slow query into a total stall, because every later request queues
+behind it and nothing ever fails, so nothing ever alerts. A request that cannot get a connection
+must raise inside the timeout — `tests/integration/test_pool_exhaustion.py` proves it does, and
+proves that returning a connection unblocks a waiter. `DB_POOL_RECYCLE` (1800s) sits under both
+MySQL's `wait_timeout` and a typical proxy idle timeout, so a connection is replaced before the
+other end drops it.
+
+**Watching it.** `db_pool_connections{state="in_use"|"available"|"overflow"}` is sampled at scrape
+time rather than per request, so it costs nothing between scrapes. Sustained `overflow` above zero
+means `pool_size` is undersized for the traffic; `in_use` pinned at `pool_size + max_overflow` with
+requests failing means the ceiling has been reached, and the next step is B3 below. The panels are
+on the [Database dashboard(../observability/dashboards.md)].
 
 ### Redis memory
 
@@ -113,5 +133,6 @@ Each assumption above is validated at M6 and the measured value recorded here
 | Cache hit ratio ≥ 90% under the target profile | _pending load test_ | 🟥 |
 | MySQL load ≈ 55 qps at target hit ratio | _pending load test_ | 🟥 |
 | Fall-through survival: MySQL at ~500 qps with Redis disabled | _pending fault-injection test (M7)_ | 🟥 |
-| Throughput scales with added replicas (no shared-state ceiling) | _pending load test_ | 🟥 |
+| Correctness under scale-out (no shared-state ceiling) | `tests/integration/test_horizontal_scaling.py`, `tests/integration/test_multi_replica.py` | 🟩 |
+| Throughput scales with added replicas | _pending load test_ | 🟥 |
 | Avg payload size 2–8 KB and Redis memory model | _pending load test_ | 🟥 |

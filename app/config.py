@@ -23,6 +23,16 @@ class Settings(BaseSettings):
     mysql_user: str = "app"
     mysql_password: str = ""
     db_pool_size: int = 10
+    # The capacity model's replica-ceiling arithmetic assumes 10/5 per replica:
+    # (151 - 20 reserved) / 15 ~= 8 replicas.
+    db_max_overflow: int = 5
+    # Never unbounded. A pool wait with no ceiling is how one slow query becomes a total
+    # stall: every later request queues behind it and nothing ever fails.
+    db_pool_timeout: float = 10.0
+    # Proxies and load balancers drop idle connections well before MySQL's wait_timeout
+    # (28800s). A recycled connection avoids "server has gone away" on a request that did
+    # nothing wrong.
+    db_pool_recycle: int = 1800
 
     # --- Redis ---
     redis_url: str = "redis://localhost:6379/0"
@@ -31,6 +41,9 @@ class Settings(BaseSettings):
     # caller outage: whatever the caller holds while waiting, it holds for good.
     redis_socket_timeout: float = 2.0
     redis_socket_connect_timeout: float = 2.0
+    # redis-py grows its pool without limit. A stalled server would then have every waiting
+    # caller open a new socket, so the cache outage becomes a file-descriptor outage.
+    redis_max_connections: int = 50
 
     # --- Cache (cache-aside) ---
     # The cache is an optimization, never a dependency. Set CACHE_ENABLED=false and the read
