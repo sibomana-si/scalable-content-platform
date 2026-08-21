@@ -1,11 +1,12 @@
 # Local dependency services for development and integration tests.
 # Mirrors the MySQL/Redis service containers in .github/workflows/ci.yml.
 #
-#   docker compose up -d                            # mysql + redis only (what the tests need)
-#   docker compose --profile observability up -d    # + prometheus + grafana
+#   docker compose up -d                                        # mysql + redis only
+#   docker compose --profile observability up -d                # + prometheus + grafana
+#   docker compose --profile scale up -d --build --scale app=3  # + app replicas behind nginx
 #
-# The observability services are behind a profile so `docker compose up -d` stays exactly what
-# the integration suite requires.
+# Everything beyond mysql and redis sits behind a profile, so a plain `docker compose up -d`
+# stays exactly what the integration suite requires and nothing more.
 services:
   mysql:
     image: mysql:8
@@ -72,6 +73,48 @@ services:
       - ./grafana/provisioning:/etc/grafana/provisioning:ro
       - ./grafana/dashboards:/var/lib/grafana/dashboards:ro
       - grafana-data:/var/lib/grafana
+
+  # --- scale profile: the app itself, replicated behind a load balancer ---
+  #
+  # Only for `pytest -m scale`. The integration suite runs the app in-process against the
+  # containers above; this exists to prove the same behaviour across real, separate replicas.
+  app:
+    build: .
+    profiles: [scale]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MYSQL_HOST: mysql
+      MYSQL_PORT: 3306
+      MYSQL_DB: content_platform
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+      REDIS_URL: redis://redis:6379/0
+      # Local only, and the same across replicas on purpose: a token minted by one replica
+      # must verify on another, which is the property the scale test checks.
+      JWT_SECRET: local-scale-test-secret-not-for-production
+      LOG_FORMAT: console
+    # No ports: nginx is the only way in, so the test cannot accidentally address one replica.
+    expose:
+      - "8000"
+
+  nginx:
+    image: nginx:1.27-alpine
+    profiles: [scale]
+    depends_on:
+      - app
+    ports:
+      - "8080:80"
+    volumes:
+      - ./nginx/scale.conf:/etc/nginx/conf.d/default.conf:ro
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost/health/live"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
 
 volumes:
   prometheus-data:

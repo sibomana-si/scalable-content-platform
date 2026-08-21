@@ -1,6 +1,6 @@
 # Testing Strategy & TDD Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-19
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-21
 
 How this project writes tests — and, more importantly, **when**: tests are written *before* the code
 they verify. This document is the practical companion to two requirements that already exist:
@@ -44,6 +44,8 @@ FR list directly.
 | FR-002 Login (JWT) | `tests/acceptance/test_fr002_login.py` | Token issue, 15-min TTL (D1), no user enumeration |
 | FR-003 RBAC | `tests/acceptance/test_fr003_rbac.py` | 401-before-403 ordering, public-read bypass |
 | FR-004 Article CRUD | `tests/acceptance/test_articles.py` | Ownership, PUT full-replace (D10), optimistic concurrency `409` (D11), soft delete (D3) |
+| Scale-out (in process) | `tests/integration/test_horizontal_scaling.py` | Two `create_app()` instances on one MySQL and one Redis: cross-instance reads, shared cache, invalidation across the process boundary, a JWT minted on one accepted by the other, no request affinity |
+| Scale-out (real replicas) | `tests/integration/test_multi_replica.py` | The same properties across containers behind nginx. Marked `scale`; skipped unless `localhost:8080` answers |
 | FR-004 Cache-aside reads | `tests/acceptance/test_fr004_cache.py` | Hit and miss counted on `/metrics`, cached body byte-identical, cursor round trip, read-your-writes after update and delete, a write by one author spares another author's page, a Redis failure during invalidation still returns 201 |
 | FR-005 Paginated reads | `tests/acceptance/test_fr005_pagination.py` | Keyset cursor (D9), `author` filter (D7), bounded page size |
 | FR-006 Retention purge | `tests/acceptance/test_fr006_purge.py` | Idempotency, retention-window boundary, untouched live rows |
@@ -65,6 +67,34 @@ deserve — the layering exists precisely so each layer is independently testabl
 Integration tests run against the **same MySQL 8 / Redis 7 service containers CI already defines**
 (`.github/workflows/ci.yml`); locally they use the docker compose stack, so
 there is one set of tests, not a "CI suite" and a "local suite."
+
+### Markers
+
+| Marker | Needs | Runs in CI |
+|---|---|---|
+| _(none)_ | Nothing. Unit and smoke tests. | Yes |
+| `integration` | MySQL and Redis, via `docker compose up -d` | Yes |
+| `scale` | The app image and the compose scale profile | **No** |
+
+Both marked suites skip on **port reachability**, not on a failed query: a local `pytest` with
+no stack skips, while CI, which provisions the services, runs them and fails loudly if a
+reachable dependency is misconfigured rather than masking it as a skip.
+
+```bash
+pytest -q                 # unit + smoke; the rest skip
+pytest -m integration     # needs docker compose up -d
+pytest -m scale           # needs docker compose --profile scale up -d --build --scale app=3
+```
+
+`scale` is excluded from CI because CI does not build the application image. Adding that build
+is deployment work (M8). Until then the in-process statelessness suite
+(`tests/integration/test_horizontal_scaling.py`) is what guards scale-out on every push, and
+`tests/integration/test_multi_replica.py` is the local confirmation across real containers.
+
+Two fixtures keep the shared services from leaking between tests. `clean_db` empties the tables
+and disposes the engine; `clean_cache` deletes the application's Redis keys. Both are autouse in
+the integration and acceptance suites, because a cached article from one test answering the next
+test's read looks like a phantom rather than like leaked state.
 
 ### What is TDD'd — and what is not
 
