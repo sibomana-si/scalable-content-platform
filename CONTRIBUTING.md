@@ -21,10 +21,14 @@ Thanks for contributing to the Scalable Content Platform Backend.
    cp .env.example .env   # fill in secrets
    ```
 4. **Start dependency services (MySQL 8 + Redis 7)** — needed for integration tests and for
-   `/health/ready`. `docker-compose.yml` provides these (the app itself has no container image yet):
+   `/health/ready`. `docker-compose.yml` provides these:
    ```bash
    docker compose up -d
    ```
+   Everything else in the compose file sits behind a profile, so this command stays exactly
+   what the integration suite needs. **Never run `docker compose down`** — it removes MySQL,
+   which declares no named volume, and the data does not come back. Use
+   `docker compose stop <service>`.
 5. **Apply database migrations** (schema, role seeds, indexes) to your local MySQL — integration
    tests migrate to head automatically, but running the app or Alembic by hand needs it:
    ```bash
@@ -58,6 +62,10 @@ These match what CI (`.github/workflows/ci.yml`) enforces:
   **skip** unless MySQL/Redis are reachable (`docker compose up -d`), and run in CI (which
   provisions both service containers).
 - Run a single test: `pytest tests/smoke/test_health_live.py::test_live`
+- Scale-out tests: `pytest -m scale`, after
+  `docker compose --profile scale up -d --build --scale app=3`. They **skip** unless the load
+  balancer answers on `localhost:8080`, and they do not run in CI, which does not build the
+  application image.
 - Coverage: `pytest --cov=app`. The 80% floor is enforced via `[tool.coverage.report] fail_under = 80`
   in `pyproject.toml`, so any `pytest --cov=app` run (CI included) gates automatically — see the
   [testing strategy](docs/development/testing-strategy.md) §5.

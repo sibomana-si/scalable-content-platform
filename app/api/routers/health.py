@@ -13,6 +13,8 @@ it is meant to report.
 """
 
 import asyncio
+import os
+import uuid
 from collections.abc import Awaitable, Callable
 from typing import Annotated
 
@@ -27,10 +29,22 @@ from app.db.session import get_engine
 
 router = APIRouter(prefix="/health", tags=["health"])
 
+# Identifies the replica answering the probe. Generated once at import, so it is stable for
+# the life of the process — a fresh value per request would make one replica look like many.
+# Kubernetes and Docker Compose both set HOSTNAME to the container name, which is the useful
+# answer when it exists; the uuid is the fallback for a local uvicorn.
+INSTANCE_ID = os.environ.get("HOSTNAME") or uuid.uuid4().hex[:12]
+
 
 @router.get("/live")
 async def live() -> dict[str, str]:
-    return {"status": "alive"}
+    """Liveness, plus which replica answered.
+
+    The instance id is on the probe and nowhere else. Putting it on the data path would leak
+    infrastructure detail to every client to serve a need only an operator and the
+    multi-replica test have.
+    """
+    return {"status": "alive", "instance": INSTANCE_ID}
 
 
 async def _probe_mysql() -> None:

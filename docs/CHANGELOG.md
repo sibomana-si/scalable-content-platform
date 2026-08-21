@@ -7,6 +7,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Horizontal scale-out, proven two ways (M5). `tests/integration/test_horizontal_scaling.py`
+  runs two `create_app()` instances against one MySQL and one Redis and asserts the
+  application-level properties: a write on one instance is readable on the other, the cache is
+  shared rather than per-process, invalidation crosses the process boundary, a JWT minted by one
+  instance is accepted by the other, a cursor issued by one is honored by the other, and an
+  alternating request sequence matches running it all on one instance. It runs in CI on every
+  push. `tests/integration/test_multi_replica.py` re-runs the same properties across real
+  containers behind an nginx round-robin balancer, under a new `scale` marker that skips unless
+  `localhost:8080` answers.
+- Application Docker image and a compose `scale` profile. Multi-stage build on `python:3.11-slim`
+  to match the CI interpreter, non-root `appuser`, runtime dependencies only but pinned to
+  `requirements.lock` through a constraints file, and a `HEALTHCHECK` on the dependency-free
+  `/health/live`. `.dockerignore` keeps `.env`, `.venv/`, `.git/`, `tests/` and `docs/` out of the
+  build context. `docker compose --profile scale up -d --build --scale app=3` adds the replicas
+  and the balancer; a plain `docker compose up -d` is still exactly MySQL and Redis, which is what
+  the integration suite needs.
+- `/health/live` now reports an `instance` id, generated once per process, so the multi-replica
+  test can count distinct replicas through the balancer. It is on the probe and nowhere else:
+  infrastructure detail does not belong on the data path.
 - Bounded MySQL and Redis connection pools (M5). The engine set `pool_size` and nothing else, so
   overflow, the pool wait, and connection recycling all ran on library defaults while the capacity
   model's replica-ceiling arithmetic already assumed 10/5. Adds `DB_MAX_OVERFLOW` (5),
