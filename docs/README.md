@@ -47,7 +47,9 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Configuration Reference](operations/configuration-reference.md) — 🟩
 
 ## Performance
-- [Load Test Plan](performance/load-test-plan.md) — 🟨
+- [Load Test Plan](performance/load-test-plan.md) — ✅
+- [Load Test Runbook](performance/load-test-runbook.md) — 🟨
+- [Bottleneck Analysis](performance/bottleneck-analysis.md) — 🟨
 - [Load Test Report](performance/load-test-report.md) — 🟨
 
 ## Resilience

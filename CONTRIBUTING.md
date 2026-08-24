@@ -69,6 +69,10 @@ These match what CI (`.github/workflows/ci.yml`) enforces:
 - Coverage: `pytest --cov=app`. The 80% floor is enforced via `[tool.coverage.report] fail_under = 80`
   in `pyproject.toml`, so any `pytest --cov=app` run (CI included) gates automatically — see the
   [testing strategy](docs/development/testing-strategy.md) §5.
+- Load tests: `docker compose --profile load run --rm k6 run /scripts/selftest.js`. The selftest
+  needs no other service and takes about a second. The real scenarios need the stack and a seeded
+  dataset — see the [load test runbook](docs/performance/load-test-runbook.md). Load tests are k6
+  JavaScript, not `pytest`, so they never run in CI.
 
 ## Documentation
 Docs live in `docs/` and are reviewed in PRs (docs-as-code). Update relevant docs alongside code changes, and the [CHANGELOG](docs/CHANGELOG.md) under `[Unreleased]`.

@@ -65,6 +65,7 @@ nav:
           - "0008 Alembic migrations": architecture/adr/0008-alembic-migrations.md
           - "0009 Observability stack": architecture/adr/0009-observability-stack.md
           - "0010 Generation counter invalidation": architecture/adr/0010-generation-counter-list-invalidation.md
+          - "0011 k6 for load testing": architecture/adr/0011-k6-for-load-testing.md
           - Template: architecture/adr/template.md
   - API:
       - OpenAPI: api/openapi.md
@@ -92,6 +93,8 @@ nav:
       - Configuration Reference: operations/configuration-reference.md
   - Performance:
       - Load Test Plan: performance/load-test-plan.md
+      - Load Test Runbook: performance/load-test-runbook.md
+      - Bottleneck Analysis: performance/bottleneck-analysis.md
       - Load Test Report: performance/load-test-report.md
   - Resilience:
       - Fault Tolerance Design: resilience/fault-tolerance-design.md

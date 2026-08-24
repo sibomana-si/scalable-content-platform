@@ -21,6 +21,21 @@ scrape_configs:
         labels:
           service: scalable-content-platform
 
+  # Every app replica under the `scale` profile. Compose publishes an A record per container
+  # for the service name, so this job grows and shrinks with `--scale app=N` and resolves to no
+  # targets when the profile is down. Do not scrape through nginx: it round-robins, which folds
+  # three replicas' counters into one series that looks plausible and is wrong.
+  - job_name: content-platform-replicas
+    metrics_path: /metrics
+    dns_sd_configs:
+      - names: [app]
+        type: A
+        port: 8000
+    relabel_configs:
+      # dns_sd_configs carries no static labels, so the dashboards' `service` filter is set here.
+      - target_label: service
+        replacement: scalable-content-platform
+
   - job_name: prometheus
     static_configs:
       - targets: ["localhost:9090"]

@@ -1,16 +1,20 @@
 # Deployment Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-21
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-24
 
 ## Local (Docker Compose)
-The compose file has three layers, each behind its own profile, so the plain command stays
+The compose file has four layers, each behind its own profile, so the plain command stays
 exactly what the integration test suite needs.
 
 ```bash
 docker compose up -d                                        # mysql + redis only
 docker compose --profile observability up -d                # + prometheus (9090) + grafana (3000)
 docker compose --profile scale up -d --build --scale app=3  # + app replicas behind nginx (8080)
+docker compose --profile load run --rm k6 run /scripts/selftest.js   # the load generator
 ```
+
+The `load` profile is `run`-only. It starts nothing in the background, because a load generator
+that outlives its run is a service nobody asked for.
 
 | Service | Port | Notes |
 |---|---|---|
@@ -20,12 +24,24 @@ docker compose --profile scale up -d --build --scale app=3  # + app replicas beh
 | `grafana` | 3000 | `observability` profile, anonymous admin, local only |
 | `nginx` | 8080 → 80 | `scale` profile; the only way into the app replicas |
 | `app` | none published | `scale` profile; reachable through nginx only |
+| `k6` | none | `load` profile, `run`-only; pinned to the E-cores with `cpuset` |
 
 **Never run `docker compose down`.** It removes every service in the project, including MySQL,
 which declares no named volume — the data does not come back. Stop what you named instead:
 
 ```bash
 docker compose stop app nginx
+```
+
+### Running a load test
+
+The load generator runs in the same compose project, on its own profile, and writes its summaries
+into `docs/performance/results/`. The [load test runbook](../performance/load-test-runbook.md)
+carries the full procedure, including the machine-state capture that decides whether a result is
+citable.
+
+```bash
+scripts/run_load_matrix.sh 2026-08-22-baseline
 ```
 
 ### Applying migrations

@@ -7,6 +7,49 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- k6 load tests behind a `load` compose profile (M6). `tests/load/` holds three open-model
+  scenarios — `steady.js` at a constant arrival rate with the NFR targets as thresholds, `ramp.js`
+  to find the knee, and `spike.js` to measure degradation and recovery. All three are arrival-rate
+  executors, never a virtual-user count: a closed model backs off when the server slows, so
+  throughput flattens into a line that hides saturation instead of showing it. The NFR numbers live
+  once, in `tests/load/lib/slo.json`, and `tests/unit/test_load_profile.py` fails when they drift
+  from `non-functional-requirements.md`. [ADR-0011](architecture/adr/0011-k6-for-load-testing.md)
+  records why k6 and not Locust: the generator shares a laptop with the system under test, so
+  generator CPU cost is a term in the measurement error, and the k6 service is pinned with
+  `cpuset: "12-19"` to leave all six P-cores to the service.
+- The read workload draws article ids from a hot set — 20% of the rows take 80% of the reads —
+  because the ≥ 90% cache hit ratio target holds only under that skew. A uniform draw across 10,000
+  rows against a 300-second TTL measures a cache that cannot work, and would "prove" the design
+  fails when the workload was wrong. `tests/load/selftest.js` asserts the picker over 100,000 draws
+  in about a second, with no infrastructure, so a distribution bug fails before a five-minute run
+  builds a result on top of it.
+- `scripts/seed_load_dataset.py` writes the 10,000-article dataset through the SQLAlchemy models in
+  batches, idempotently: a second run tops the count up rather than duplicating. Seeding through
+  the API would be slow, would pollute the metrics about to be read, and would give no control over
+  the author distribution. The decision logic is pure, so `tests/unit/test_seed_dataset.py` checks
+  the batching, the body bounds, and the skew in milliseconds; `tests/integration/test_seed_dataset.py`
+  confirms all three survive a round trip through real MySQL. Load-test accounts use the reserved
+  `loadtest.example` domain and an unusable password hash, so none of them can be logged into.
+- Machine state is now a recorded part of every run, not an assumption. `scripts/perf_env.sh` locks
+  the power profile with `powerprofilesctl` — not `cpupower`, because `power-profiles-daemon`
+  reverts a raw `sysfs` write mid-run, and the run still produces numbers — and emits a JSON
+  snapshot of the governor, the energy performance preference, the RAPL limits, both throttle
+  counters, the generator `cpuset`, and the AC state. `scripts/run_metadata.py` validates that
+  snapshot and decides whether a before-and-after pair is citable, reporting every reason it is not
+  rather than the first. `scripts/run_load_matrix.sh` drives the four-run matrix and restores the
+  daily power profile from an EXIT trap, so an interrupted matrix never leaves the laptop pinned.
+- Prometheus now scrapes each app replica directly, through `dns_sd_configs` on the compose service
+  name, so the job grows and shrinks with `--scale app=N`. The previous configuration scraped only
+  the host job, which meant a three-replica run had no server-side metrics at all. Scraping through
+  nginx would have been worse than nothing: round-robin folds three replicas' counters into one
+  series that looks plausible and is wrong. `tests/unit/test_dashboards.py` asserts the job exists,
+  targets port 8000, and never names nginx.
+- `docs/performance/load-test-runbook.md` — how to repeat the measurement on a cold machine, with
+  the prerequisites, the matrix, results collection, the citability checks, teardown, and a
+  parameter reference. `tests/unit/test_load_runbook.py` parses its command blocks and fails when a
+  script path, a compose profile, a k6 argument, or an environment variable stops resolving, so the
+  document cannot rot into a set of commands that no longer run.
+
 - Horizontal scale-out, proven two ways (M5). `tests/integration/test_horizontal_scaling.py`
   runs two `create_app()` instances against one MySQL and one Redis and asserts the
   application-level properties: a write on one instance is readable on the other, the cache is
