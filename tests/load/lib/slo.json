@@ -1,0 +1,50 @@
+{
+  "_comment": "Machine-readable copy of the NFR targets. tests/unit/test_load_profile.py fails the build if these drift from the document named in `source`. Edit the document first, this file second.",
+  "source": "docs/requirements/non-functional-requirements.md",
+  "latency_ms": {
+    "read_p50": 50,
+    "read_p95": 200,
+    "read_p99": 450,
+    "write_p95": 500
+  },
+  "throughput_rps": 500,
+  "error_rate": 0.001,
+  "cache_hit_ratio": 0.9,
+  "workload": {
+    "read_share": 0.95,
+    "write_share": 0.05,
+    "hot_set_share": 0.2,
+    "hot_set_traffic": 0.8,
+    "articles": 10000,
+    "page_size": 20,
+    "max_pages": 5,
+    "detail_share_of_reads": 0.8,
+    "body_bytes_min": 2048,
+    "body_bytes_max": 8192
+  },
+  "scenarios": {
+    "steady": {
+      "rate_rps": 200,
+      "duration": "5m",
+      "pre_allocated_vus": 100,
+      "max_vus": 600
+    },
+    "ramp": {
+      "start_rps": 50,
+      "step_rps": 50,
+      "steps": 10,
+      "step_duration": "45s",
+      "pre_allocated_vus": 100,
+      "max_vus": 900
+    },
+    "spike": {
+      "base_rps": 50,
+      "peak_rps": 500,
+      "settle_duration": "45s",
+      "spike_duration": "30s",
+      "recovery_duration": "90s",
+      "pre_allocated_vus": 100,
+      "max_vus": 900
+    }
+  }
+}

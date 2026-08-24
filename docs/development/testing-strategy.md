@@ -1,6 +1,6 @@
 # Testing Strategy & TDD Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-21
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-24
 
 How this project writes tests — and, more importantly, **when**: tests are written *before* the code
 they verify. This document is the practical companion to two requirements that already exist:
@@ -91,6 +91,37 @@ is deployment work (M8). Until then the in-process statelessness suite
 (`tests/integration/test_horizontal_scaling.py`) is what guards scale-out on every push, and
 `tests/integration/test_multi_replica.py` is the local confirmation across real containers.
 
+### Load tests
+
+Load tests are not `pytest` tests. They live in `tests/load/` as k6 JavaScript, run in a container
+behind the `load` compose profile, and sit outside `testpaths`, so `pytest` never collects them.
+[ADR-0011](../architecture/adr/0011-k6-for-load-testing.md) records why.
+
+| Path | What it is |
+|---|---|
+| `tests/load/lib/slo.json` | The NFR numbers in machine-readable form. The single source for every k6 threshold. |
+| `tests/load/lib/` | The hot-set picker, the cursor walk, the payload builder, the API client, and the summary writer. |
+| `tests/load/scenarios/` | `steady.js`, `ramp.js`, and `spike.js`. |
+| `tests/load/selftest.js` | k6-native checks on `lib/`. Runs in about a second and needs no infrastructure. |
+
+```bash
+docker compose --profile load run --rm k6 run /scripts/selftest.js
+docker compose --profile load run --rm k6 run /scripts/scenarios/steady.js
+```
+
+Run the selftest before every real scenario. A broken picker fakes the cache hit ratio, and every
+latency number the run produced afterwards is fiction.
+
+Four `pytest` tests guard the load suite from the Python side, because `ruff` does not lint
+JavaScript:
+
+| Test | Guards |
+|---|---|
+| `tests/unit/test_load_profile.py` | `slo.json` against the NFR table, and every scenario against the plan document. |
+| `tests/unit/test_seed_dataset.py` | The seeder's batching, body bounds, and distribution shape. |
+| `tests/unit/test_run_metadata.py` | The machine-state snapshot schema, and the rule that decides whether a run is citable. |
+| `tests/unit/test_load_runbook.py` | Every script path, compose profile, k6 argument, and environment variable the runbook names. |
+
 Two fixtures keep the shared services from leaking between tests. `clean_db` empties the tables
 and disposes the engine; `clean_cache` deletes the application's Redis keys. Both are autouse in
 the integration and acceptance suites, because a cached article from one test answering the next
@@ -113,7 +144,13 @@ test's read looks like a phantom rather than like leaked state.
   exactly the silent kind.
 - **Validation, not TDD:** load tests (M6, [load-test-plan](../performance/load-test-plan.md)) and
   fault-injection/chaos runs (M7, [chaos-test-report](../resilience/chaos-test-report.md)) measure
-  the running system against NFR targets; they are reports, not red-green loops.
+  the running system against NFR targets; they are reports, not red-green loops. You cannot write
+  a failing assertion for "P95 is 180 ms" before you have measured anything. **The rule applies to
+  the scenario scripts, not to everything M6 ships.** The dataset seeder, the SLO-to-threshold
+  consistency check, the replica scrape configuration, the hot-set picker, the run-metadata schema,
+  and every optimization the measurement leads to were all written test-first. What was not: the
+  three k6 scenarios, whose output *is* the assertion, and `scripts/perf_env.sh`, which is shell
+  over `/sys` and is verified by running it.
 
 ## 4. Tooling & commands
 
@@ -158,4 +195,6 @@ Two changes to `.github/workflows/ci.yml` are due **when the first real test lan
 - [Functional requirements](../requirements/functional-requirements.md) (the canonical test list)
 - [NFR — Maintainability](../requirements/non-functional-requirements.md) (coverage floor, test types, CI gates)
 - [Threat model](../security/threat-model.md) (source of security/abuse cases)
+- [ADR-0011 — k6 for load testing](../architecture/adr/0011-k6-for-load-testing.md) (why the load suite is not Python)
+- [Load test runbook](../performance/load-test-runbook.md) (how to repeat a measurement run)
 - [Load test plan](../performance/load-test-plan.md) · [Chaos test report](../resilience/chaos-test-report.md) (validation, outside TDD)

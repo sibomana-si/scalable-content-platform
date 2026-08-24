@@ -4,6 +4,7 @@
 #   docker compose up -d                                        # mysql + redis only
 #   docker compose --profile observability up -d                # + prometheus + grafana
 #   docker compose --profile scale up -d --build --scale app=3  # + app replicas behind nginx
+#   docker compose --profile load run --rm k6 run /scripts/selftest.js   # the load generator
 #
 # Everything beyond mysql and redis sits behind a profile, so a plain `docker compose up -d`
 # stays exactly what the integration suite requires and nothing more.
@@ -40,6 +41,9 @@ services:
       - --config.file=/etc/prometheus/prometheus.yml
       - --storage.tsdb.path=/prometheus
       - --web.enable-lifecycle # POST /-/reload after editing alerts.yml
+      # k6 pushes client-side latency here, so the load generator's numbers share a time axis
+      # with cache_hits_total and db_pool_connections. Without this the push 404s.
+      - --web.enable-remote-write-receiver
     ports:
       - "9090:9090"
     volumes:
@@ -93,6 +97,9 @@ services:
       MYSQL_USER: app
       MYSQL_PASSWORD: app
       REDIS_URL: redis://redis:6379/0
+      # Run A of the load matrix is the uncached baseline. An env var, not an edit, so the
+      # matrix script can flip it between runs and the file stays the same for every run.
+      CACHE_ENABLED: ${CACHE_ENABLED:-true}
       # Local only, and the same across replicas on purpose: a token minted by one replica
       # must verify on another, which is the property the scale test checks.
       JWT_SECRET: local-scale-test-secret-not-for-production
@@ -115,6 +122,34 @@ services:
       interval: 5s
       timeout: 3s
       retries: 10
+
+  # --- load profile: the k6 load generator (M6) ---
+  #
+  # Runs on demand (`run --rm`), never `up`. See docs/performance/load-test-runbook.md.
+  k6:
+    image: grafana/k6:0.57.0
+    profiles: [load]
+    # The eight E-cores. The generator shares this laptop with the system under test, so its CPU
+    # cost is measurement error: pinning it here leaves all six P-cores to MySQL, Redis and the
+    # app replicas. Widen the set only if `dropped_iterations` shows the generator starved, and
+    # say so in the report.
+    cpuset: "${K6_CPUSET:-12-19}"
+    # The image runs as uid 12345, which cannot write a bind mount owned by the host user, and
+    # the summary file is the whole point of the run.
+    user: "${K6_UID:-1000}:${K6_GID:-1000}"
+    volumes:
+      - ./tests/load:/scripts:ro
+      - ./docs/performance/results:/results
+    # So a run can target a uvicorn on the host as well as the in-compose nginx.
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    environment:
+      BASE_URL: ${BASE_URL:-http://nginx:80}
+      RUN_ID: ${RUN_ID:-adhoc}
+      RESULTS_DIR: /results
+      # Used only when a run adds `-o experimental-prometheus-rw`.
+      K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
+      K6_PROMETHEUS_RW_TREND_STATS: "p(50),p(95),p(99),max"
 
 volumes:
   prometheus-data:

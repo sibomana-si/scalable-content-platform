@@ -361,3 +361,69 @@ def test_the_database_dashboard_shows_the_connection_pool() -> None:
     expressions = " ".join(expr for _, expr in panel_expressions(dashboard))
 
     assert "db_pool_connections" in expressions
+
+
+# --- scraping the replicas (M6) ----------------------------------------------------------------
+
+
+def replica_job() -> dict:
+    config = yaml.safe_load(PROMETHEUS_CONFIG.read_text())
+    jobs = {job["job_name"]: job for job in config["scrape_configs"]}
+
+    assert "content-platform-replicas" in jobs, (
+        "no replica scrape job: under `--scale app=3` the host-gateway job finds nothing, so "
+        f"the load test would run with no server-side metrics at all (have: {sorted(jobs)})"
+    )
+    return jobs["content-platform-replicas"]
+
+
+def test_the_replica_job_discovers_every_app_container() -> None:
+    """Static targets cannot name a replica whose address Docker assigns at start."""
+
+    discovery = replica_job()["dns_sd_configs"]
+
+    assert discovery[0]["names"] == ["app"]
+    assert discovery[0]["type"] == "A"
+    assert discovery[0]["port"] == 8000
+
+
+def test_the_replica_job_does_not_scrape_through_the_load_balancer() -> None:
+    """nginx round-robins, so scraping it folds three counters into one incoherent series.
+
+    The symptom is worse than missing data: the numbers look plausible and are wrong.
+    """
+
+    rendered = yaml.safe_dump(replica_job())
+
+    assert "nginx" not in rendered
+    assert ":80" not in rendered
+
+
+def test_the_replica_job_scrapes_the_metrics_path() -> None:
+    assert replica_job().get("metrics_path", "/metrics") == "/metrics"
+
+
+def test_the_replica_job_carries_the_same_service_label_as_the_host_job() -> None:
+    """The dashboards filter on `service`. A replica without it disappears from every panel."""
+
+    config = yaml.safe_load(PROMETHEUS_CONFIG.read_text())
+    host_job = next(j for j in config["scrape_configs"] if j["job_name"] == "content-platform")
+    host_label = host_job["static_configs"][0]["labels"]["service"]
+
+    # dns_sd_configs takes no static `labels` block, so the label is attached by relabelling.
+    relabels = replica_job()["relabel_configs"]
+
+    assert any(
+        rule.get("target_label") == "service" and rule.get("replacement") == host_label
+        for rule in relabels
+    ), f"no relabel rule sets service={host_label!r}"
+
+
+def test_prometheus_accepts_the_load_generator_remote_write() -> None:
+    """k6 pushes its client-side latency here. Without the receiver flag it has nowhere to land,
+    and k6 fails the run with a 404 that reads like a network fault."""
+
+    compose = yaml.safe_load((REPO_ROOT / "docker-compose.yml").read_text())
+    command = compose["services"]["prometheus"]["command"]
+
+    assert any("--web.enable-remote-write-receiver" in flag for flag in command)
