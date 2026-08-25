@@ -147,6 +147,9 @@ services:
       BASE_URL: ${BASE_URL:-http://nginx:80}
       RUN_ID: ${RUN_ID:-adhoc}
       RESULTS_DIR: /results
+      # Where the seeded id block begins. AUTO_INCREMENT does not restart at 1 after a
+      # delete, so a generator that assumes 1..N reads ids that do not exist.
+      ARTICLE_ID_MIN: ${ARTICLE_ID_MIN:-1}
       # Used only when a run adds `-o experimental-prometheus-rw`.
       K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
       K6_PROMETHEUS_RW_TREND_STATS: "p(50),p(95),p(99),max"

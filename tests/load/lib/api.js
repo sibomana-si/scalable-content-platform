@@ -27,6 +27,9 @@ function record(op, response) {
 // Registration and login run once, in setup(). Argon2id is deliberately expensive, so a
 // per-iteration login would measure the hash function rather than the API.
 export function authenticate() {
+  // Not `.invalid`: the API validates with `EmailStr`, which rejects every special-use domain.
+  // The seeder writes its authors straight to MySQL and can use `loadtest.invalid`; this account
+  // goes through /v1/auth/register, so it needs a domain the validator accepts.
   const email = `k6-writer-${Date.now()}-${Math.floor(Math.random() * 1e6)}@loadtest.example`;
   const password = 'k6-load-test-writer-passphrase';
   const headers = { 'Content-Type': 'application/json' };

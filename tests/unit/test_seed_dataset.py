@@ -5,6 +5,10 @@ the authorship is. Both live in pure functions, so a wrong dataset fails in mill
 instead of after a five-minute run.
 """
 
+import subprocess
+import sys
+from pathlib import Path
+
 import pytest
 
 from scripts.seed_load_dataset import (
@@ -12,11 +16,16 @@ from scripts.seed_load_dataset import (
     DEFAULT_AUTHORS,
     DEFAULT_HOT_SHARE,
     SeedPlan,
+    SeedResult,
     author_slots,
     build_body,
     parse_args,
+    parse_cli,
     plan_batches,
+    range_payload,
 )
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def a_plan(**overrides: object) -> SeedPlan:
@@ -185,3 +194,77 @@ def test_every_slot_names_a_real_author() -> None:
     plan = a_plan(articles=2_000, authors=7, hot_share=0.3)
 
     assert all(0 <= slot < plan.authors for slot in author_slots(plan))
+
+
+def test_the_script_runs_as_a_command_from_the_repository_root() -> None:
+    """The runbook documents ``python scripts/seed_load_dataset.py``.
+
+    Run that way, ``sys.path[0]`` is ``scripts/``, not the repository root, so ``import app``
+    fails. ``pytest`` hides the problem because ``pythonpath = ["."]`` puts the root on the path
+    for it. This test runs the documented command, so the two cannot diverge.
+    """
+
+    result = subprocess.run(
+        [sys.executable, "scripts/seed_load_dataset.py", "--help"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
+        timeout=60,
+    )
+    assert result.returncode == 0, result.stderr
+    assert "--articles" in result.stdout
+
+
+# --- The id range the load generator must draw from ------------------------------------------
+#
+# The generator picks article ids. MySQL `AUTO_INCREMENT` does not restart at 1 after a delete,
+# so the seeded block starts wherever the counter happened to be. A generator that assumes
+# 1..10,000 reads ids that do not exist, and every 404 is a cheap miss that never populates the
+# cache — the hit ratio then measures the wrong thing while looking plausible.
+
+
+def a_result(**overrides: object) -> SeedResult:
+    defaults: dict[str, object] = {
+        "authors_created": 0,
+        "articles_before": 0,
+        "articles_created": 10,
+        "id_min": 5_001,
+        "id_max": 5_010,
+    }
+    defaults.update(overrides)
+    return SeedResult(**defaults)  # type: ignore[arg-type]
+
+
+def test_the_range_payload_carries_the_observed_ids() -> None:
+    assert range_payload(a_result()) == {"id_min": 5_001, "id_max": 5_010, "articles": 10}
+
+
+def test_the_range_payload_counts_rows_that_were_already_there() -> None:
+    payload = range_payload(a_result(articles_before=90, articles_created=10, id_max=5_100))
+    assert payload["articles"] == 100
+
+
+def test_a_dataset_with_rows_but_no_ids_is_an_error() -> None:
+    with pytest.raises(ValueError, match="id range"):
+        range_payload(a_result(id_min=None, id_max=None))
+
+
+def test_an_empty_dataset_reports_an_empty_range() -> None:
+    payload = range_payload(a_result(articles_created=0, id_min=None, id_max=None))
+    assert payload == {"id_min": None, "id_max": None, "articles": 0}
+
+
+def test_an_inverted_range_is_an_error() -> None:
+    with pytest.raises(ValueError, match="id range"):
+        range_payload(a_result(id_min=5_010, id_max=5_001))
+
+
+def test_the_range_file_path_is_optional() -> None:
+    _, emit_range = parse_cli([])
+    assert emit_range is None
+
+
+def test_the_range_file_path_is_read_from_the_command_line() -> None:
+    plan, emit_range = parse_cli(["--articles", "50", "--emit-range", "/results/dataset.json"])
+    assert emit_range == Path("/results/dataset.json")
+    assert plan.articles == 50
