@@ -16,7 +16,7 @@ pollute the metrics you are about to read, and they give no control over the dis
 Run it after ``alembic upgrade head``:
 
 ```bash
-python -m scripts.seed_load_dataset --articles 10000
+python scripts/seed_load_dataset.py --articles 10000
 ```
 
 The run is idempotent. A second call tops the dataset up to the requested count and adds nothing
@@ -27,14 +27,20 @@ from __future__ import annotations
 
 import argparse
 import asyncio
+import json
 import random
 import sys
 from dataclasses import dataclass
+from pathlib import Path
 
-from sqlalchemy import func, insert, select
+# Run as `python scripts/seed_load_dataset.py`, sys.path[0] is `scripts/`, so `import app` fails.
+# pytest hides this, because `pythonpath = ["."]` puts the repository root on the path for it.
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from app.db.session import get_engine, get_sessionmaker
-from app.models import Article, Role, User
+from sqlalchemy import func, insert, select  # noqa: E402
+
+from app.db.session import get_engine, get_sessionmaker  # noqa: E402
+from app.models import Article, Role, User  # noqa: E402
 
 DEFAULT_ARTICLES = 10_000
 DEFAULT_AUTHORS = 50
@@ -87,6 +93,8 @@ class SeedResult:
     authors_created: int
     articles_before: int
     articles_created: int
+    id_min: int | None = None
+    id_max: int | None = None
 
     @property
     def articles_after(self) -> int:
@@ -143,7 +151,28 @@ def author_slots(plan: SeedPlan) -> list[int]:
     return slots
 
 
-def parse_args(argv: list[str] | None = None) -> SeedPlan:
+def range_payload(result: SeedResult) -> dict[str, int | None]:
+    """Describe the id block the load generator must draw from.
+
+    MySQL ``AUTO_INCREMENT`` does not restart at 1 after a delete, so the seeded rows begin
+    wherever the counter stood. A generator that assumes 1 to N reads ids that do not exist, and
+    a 404 is a cheap miss that never populates the cache. The hit ratio then measures the wrong
+    thing and still looks plausible, which is the failure this function exists to prevent.
+    """
+
+    articles = result.articles_after
+    if articles == 0:
+        return {"id_min": None, "id_max": None, "articles": 0}
+    if result.id_min is None or result.id_max is None:
+        raise ValueError(f"the dataset holds {articles} rows but reports no id range")
+    if result.id_min > result.id_max:
+        raise ValueError(f"inverted id range {result.id_min}..{result.id_max}")
+    return {"id_min": result.id_min, "id_max": result.id_max, "articles": articles}
+
+
+def parse_cli(argv: list[str] | None = None) -> tuple[SeedPlan, Path | None]:
+    """Return the seeding plan, and where to write the id range."""
+
     parser = argparse.ArgumentParser(
         description=__doc__, formatter_class=argparse.RawTextHelpFormatter
     )
@@ -166,13 +195,19 @@ def parse_args(argv: list[str] | None = None) -> SeedPlan:
     parser.add_argument(
         "--seed", type=int, default=DEFAULT_SEED, help="makes the dataset repeatable"
     )
+    parser.add_argument(
+        "--emit-range",
+        type=Path,
+        default=None,
+        help="write the seeded id range to this JSON file",
+    )
     args = parser.parse_args(argv)
 
     low, _, high = args.body_bytes.partition("-")
     if not high:
         raise ValueError(f"body bytes must be given as MIN-MAX, got {args.body_bytes!r}")
 
-    return SeedPlan(
+    plan = SeedPlan(
         articles=args.articles,
         authors=args.authors,
         hot_share=args.hot_share,
@@ -181,6 +216,11 @@ def parse_args(argv: list[str] | None = None) -> SeedPlan:
         batch_size=args.batch_size,
         seed=args.seed,
     )
+    return plan, args.emit_range
+
+
+def parse_args(argv: list[str] | None = None) -> SeedPlan:
+    return parse_cli(argv)[0]
 
 
 async def ensure_authors(session, plan: SeedPlan) -> tuple[list[int], int]:
@@ -241,21 +281,39 @@ async def seed(plan: SeedPlan) -> SeedResult:
             await session.commit()
             created += size
 
+        bounds = (
+            await session.execute(
+                select(func.min(Article.id), func.max(Article.id)).where(
+                    Article.author_id.in_(author_ids)
+                )
+            )
+        ).one()
+
     return SeedResult(
-        authors_created=authors_created, articles_before=existing, articles_created=created
+        authors_created=authors_created,
+        articles_before=existing,
+        articles_created=created,
+        id_min=bounds[0],
+        id_max=bounds[1],
     )
 
 
 async def main(argv: list[str] | None = None) -> int:
-    plan = parse_args(argv)
+    plan, emit_range = parse_cli(argv)
     try:
         result = await seed(plan)
     finally:
         await get_engine().dispose()
 
+    payload = range_payload(result)
+    if emit_range is not None:
+        emit_range.parent.mkdir(parents=True, exist_ok=True)
+        emit_range.write_text(json.dumps(payload, indent=2) + "\n")
+
     print(
         f"authors created {result.authors_created} · articles before {result.articles_before} · "
-        f"created {result.articles_created} · total {result.articles_after}"
+        f"created {result.articles_created} · total {result.articles_after} · "
+        f"ids {payload['id_min']}..{payload['id_max']}"
     )
     return 0
 

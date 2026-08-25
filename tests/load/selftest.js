@@ -26,12 +26,12 @@ export const options = {
 const DRAWS = 100000;
 const workload = slo.workload;
 
-function draw(count, override) {
+function draw(count, override, idBase) {
   const rand = makeRng(20260822);
   const shape = Object.assign({}, workload, override || {});
   const ids = new Array(count);
   for (let i = 0; i < count; i += 1) {
-    ids[i] = pickArticleId(rand, shape);
+    ids[i] = pickArticleId(rand, shape, idBase);
   }
   return ids;
 }
@@ -63,6 +63,23 @@ export default function selftest() {
   const firstFifth = flat.filter((id) => id <= workload.articles / 5).length / flat.length;
   check(firstFifth, {
     'a hot share of zero spreads the draws evenly': (rate) => Math.abs(rate - 0.2) < 0.02,
+  });
+
+  // --- the picker follows the seeded block, wherever AUTO_INCREMENT put it ---
+  const base = 5001;
+  const shifted = draw(DRAWS, null, base);
+  check(shifted, {
+    'a shifted id base moves the whole range': (drawn) =>
+      drawn.every((id) => id >= base && id <= base + workload.articles - 1),
+  });
+  const shiftedHot = shifted.filter((id) => id < base + hot).length / shifted.length;
+  check(shiftedHot, {
+    'a shifted id base keeps the hot share': (rate) =>
+      Math.abs(rate - workload.hot_set_traffic) < 0.02,
+  });
+  check(shifted, {
+    'a shifted id base replays the unshifted draws': (drawn) =>
+      drawn.every((id, i) => id - base === ids[i] - 1),
   });
 
   // --- the cursor walk terminates, even against a server that always offers another page ---

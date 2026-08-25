@@ -20,20 +20,27 @@ export function makeRng(seed) {
   };
 }
 
-// Article ids are 1-based and contiguous, because the seeder inserts them in one run.
+// The seeder writes one contiguous block of ids, but MySQL `AUTO_INCREMENT` does not restart at
+// 1 after a delete, so the block rarely begins there. `seed_load_dataset.py --emit-range` records
+// where it does begin, and the matrix passes that in. Drawing from 1..N against a block that
+// starts at 5001 reads ids that do not exist, and every 404 is a cheap miss that never populates
+// the cache — the hit ratio then measures the wrong thing and still looks plausible.
+export const ARTICLE_ID_BASE = Number(__ENV.ARTICLE_ID_MIN || 1);
+
 export function hotSetSize(articles, hotSetShare) {
   return Math.floor(articles * hotSetShare);
 }
 
 // Draw an article id. `hotSetTraffic` of the draws land in the first `hotSetShare` of the ids;
 // the rest spread over the cold tail. A hot set of zero gives a flat distribution.
-export function pickArticleId(rand, workload) {
+export function pickArticleId(rand, workload, idBase) {
+  const base = idBase === undefined ? ARTICLE_ID_BASE : idBase;
   const articles = workload.articles;
   const hot = hotSetSize(articles, workload.hot_set_share);
   if (hot > 0 && rand() < workload.hot_set_traffic) {
-    return 1 + Math.floor(rand() * hot);
+    return base + Math.floor(rand() * hot);
   }
-  return 1 + hot + Math.floor(rand() * (articles - hot));
+  return base + hot + Math.floor(rand() * (articles - hot));
 }
 
 // Walk keyset pages, and stop. Two things end the walk: the server returns no next cursor, or

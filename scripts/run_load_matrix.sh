@@ -37,6 +37,9 @@ SEED_ARTICLES="${SEED_ARTICLES:-10000}"
 PYTHON="${PYTHON:-.venv/bin/python}"
 export K6_CPUSET="${K6_CPUSET:-12-19}"
 export BASE_URL="${BASE_URL:-http://nginx:80}"
+# The seeder overwrites this after each seed. AUTO_INCREMENT does not restart at 1, so the
+# generator must be told where the seeded block begins or it draws ids that do not exist.
+export ARTICLE_ID_MIN="${ARTICLE_ID_MIN:-1}"
 
 say() { printf '\n=== %s\n' "$*"; }
 
@@ -97,7 +100,13 @@ one_run() {
   scripts/perf_env.sh report "$RESULTS_DIR/${run_id}-before.json"
 
   stack_up "$replicas" "$cache"
-  "$PYTHON" -m scripts.seed_load_dataset --articles "$SEED_ARTICLES"
+  "$PYTHON" scripts/seed_load_dataset.py \
+    --articles "$SEED_ARTICLES" --emit-range "$RESULTS_DIR/${run_id}-dataset.json"
+  ARTICLE_ID_MIN="$("$PYTHON" -c \
+    "import json,sys; print(json.load(open(sys.argv[1]))['id_min'])" \
+    "$RESULTS_DIR/${run_id}-dataset.json")"
+  export ARTICLE_ID_MIN
+  echo "article ids start at ${ARTICLE_ID_MIN}"
 
   say "run ${label}: warming (results discarded)"
   k6_run scenarios/steady.js "${run_id}-warmup" "RATE=$WARM_RATE" "DURATION=$WARM_DURATION"

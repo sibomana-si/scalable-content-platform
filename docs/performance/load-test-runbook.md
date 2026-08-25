@@ -1,6 +1,6 @@
 # Load Test Runbook
 
-> **Status:** 🟨 In progress — sections 5 and 7 are filled by the M6 measurement run · **Owner:** Simon Sibomana · **Last updated:** 2026-08-24
+> **Status:** 🟨 In progress — sections 5 and 7 are filled by the M6 measurement run · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
 
 How to repeat the M6 load test on a cold machine, without having been in the room.
 
@@ -101,16 +101,17 @@ Start the stack yourself, then run the scenario:
 docker compose up -d
 docker compose --profile observability up -d
 CACHE_ENABLED=true docker compose --profile scale up -d --build --scale app=1
-.venv/bin/python -m scripts.seed_load_dataset --articles 10000
+.venv/bin/python scripts/seed_load_dataset.py --articles 10000 --emit-range docs/performance/results/manual-dataset.json
+export ARTICLE_ID_MIN=$(.venv/bin/python -c "import json; print(json.load(open('docs/performance/results/manual-dataset.json'))['id_min'])")
 scripts/perf_env.sh lock
 scripts/perf_env.sh report docs/performance/results/manual-before.json
 docker compose --profile load run --rm -e RUN_ID=manual k6 run /scripts/scenarios/steady.js
 scripts/perf_env.sh report docs/performance/results/manual-after.json
 ```
 
-Run the seeder as a module, from the repository root. The `-m` form puts the root on the import
-path, and the seeder imports `app.db.session`. A direct call to the file path puts `scripts/` on
-the path instead, and the seeder stops with `ModuleNotFoundError: No module named 'app'`.
+Do not skip the `ARTICLE_ID_MIN` export. Without it the generator draws ids from 1, the reads
+return 404, and a 404 is a cheap miss that never populates the cache. The hit ratio then measures
+the wrong thing and still looks plausible.
 
 Override any scenario parameter from the command line:
 
@@ -151,6 +152,7 @@ Everything lands in `docs/performance/results/`, named for the run id:
 |---|---|---|
 | `<run-id>-before.json` | `perf_env.sh report` | Machine state before the run. |
 | `<run-id>-after.json` | `perf_env.sh report` | Machine state after the run. |
+| `<run-id>-dataset.json` | `seed_load_dataset.py --emit-range` | The seeded id block: `id_min`, `id_max`, and the row count. |
 | `steady-<run-id>.json` | k6 `handleSummary` | The full k6 summary, including per-operation percentiles. |
 | `ramp-<run-id>.json` | k6 `handleSummary` | The same, per ramp stage. |
 | `spike-<run-id>.json` | k6 `handleSummary` | The same, across the spike and the recovery. |
@@ -278,7 +280,7 @@ articles on a second run.
 ```bash
 docker compose up -d
 .venv/bin/alembic upgrade head
-.venv/bin/python -m scripts.seed_load_dataset --articles 10000
+.venv/bin/python scripts/seed_load_dataset.py --articles 10000
 ```
 
 🟨 _Task 2 adds the failures actually met during the measurement run._
@@ -302,6 +304,7 @@ Every knob the commands above accept. Defaults are what the scripts use when you
 | `K6_GID` | `1000` | Group for the same reason. | `docker-compose.yml` |
 | `BASE_URL` | `http://nginx:80` | What the generator targets. Use `http://host.docker.internal:8000` for a host uvicorn. | `api.js` |
 | `RUN_ID` | `adhoc` | Names every file the run writes. | `summary.js` |
+| `ARTICLE_ID_MIN` | `1` | Where the seeded id block begins. `AUTO_INCREMENT` does not restart at 1 after a delete, so a generator that assumes 1 to N reads ids that do not exist. The matrix reads it from the seeder. | `docker-compose.yml`, `run_load_matrix.sh` |
 | `RATE` | from `slo.json` | Arrival rate of the steady run, in requests per second. | `steady.js` |
 | `DURATION` | from `slo.json` | Length of the steady run. | `steady.js` |
 | `STEP_DURATION` | from `slo.json` | How long the ramp holds each step. | `ramp.js` |
