@@ -1,6 +1,6 @@
 # Capacity & Scaling Model
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-20
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
 
 Back-of-the-envelope sizing that justifies the scaling claims. These are **planning numbers, not
 commitments** — each is validated (or corrected) by the M6 load test, and this document is updated
@@ -117,6 +117,26 @@ Where this design stops scaling, in the order limits are expected to bite, and t
 | B4 | **Single Redis node** (memory or throughput) | Evictions of hot keys, cache latency | Larger node first; Redis Cluster only if the hot set outgrows one node (unlikely at this scale) |
 | B5 | **Single MySQL writer** (writes scale vertically only) | Write latency under sustained write growth | Out of MVP scope; documented path: vertical scale → functional partitioning → sharding |
 | B6 | **Single region** | Latency for distant readers; regional blast radius | Out of scope ([PRD §9](../requirements/product-requirements.md)); path: CDN/edge cache for public reads before multi-region anything |
+
+### What the M6 matrix found
+
+The four-run matrix of 2026-08-22 measured this list for the first time. Full evidence is in the
+[bottleneck analysis](../performance/bottleneck-analysis.md); this table records which limits
+appeared, and at what load.
+
+| # | Appeared? | At what load | Evidence |
+|---|---|---|---|
+| B1 | **No** | Not at 464 rps | The article hit ratio during the spike (83.0–83.3%) matches steady state. No miss burst on any spike window, so TTL jitter and single-flight hold |
+| B2 | **No** | Not at 509 rps | Query P95 stays at 0.96–1.00 ms from 200 rps to 509 rps. The "~500 qps uncached" figure validated: run A's knee of 429 rps at 1.16 queries per request is 498 qps |
+| B3 | **Partly** | 1 replica, cache off, ~430 rps | The pool filled (`in_use` 10 + `overflow` 5) only in run A. With the cache on it peaked at 6 in use and never overflowed. The model predicted this at 8+ replicas; it appears instead without a cache |
+| B4 | **No** | Not at 509 rps | `cache_errors_total` is zero in every run. Redis holds 2.05 MB for the whole working set |
+| B5 | **Not exercised** | — | The 5% write mix never approached a write ceiling |
+| B6 | **Not exercised** | — | Single-host test by design |
+
+The matrix found a limit the list does not name, and it bites before any of them: **one app
+replica saturates near 430 rps, and the cache does not raise that ceiling** (finding F1). The cost
+is CPU inside the application — object construction, validation, and serialization — not the
+database and not the cache. Add it to the list as B0, the limit that arrives first.
 
 The deliberate MVP position: **scale the stateless tier horizontally, shield the stateful tier with
 the cache, and document — rather than build — the next rung of each ladder** until measurements

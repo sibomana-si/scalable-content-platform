@@ -12,11 +12,14 @@ import json
 import pytest
 
 from scripts.run_metadata import (
+    DEFAULT_MAX_THROTTLE_DRIFT,
     REQUIRED_KEYS,
     MetadataError,
     is_citable,
     load,
+    repeat_is_consistent,
     throttle_delta,
+    throttle_drift,
     validate,
 )
 
@@ -196,3 +199,98 @@ def test_an_incomplete_snapshot_cannot_be_judged() -> None:
 
     with pytest.raises(MetadataError):
         is_citable(snapshot, a_snapshot(), max_package_delta=1_000)
+
+
+# --- the repeat comparison ------------------------------------------------------------------------
+#
+# The first matrix measured what the absolute throttle cap was guessing at. Four runs on the same
+# chassis produced package deltas of 16,015 (A), 11,859 (B), 2,123 (C) and 11,468 (B2). The spread
+# tracks how long each run spent saturated, not how much the environment moved: A drove every read
+# to MySQL and throttled most, C never reached its knee and throttled least. An absolute cap
+# therefore punishes the run that finds the bottleneck, which is backwards.
+#
+# The pair that does carry drift is a run against its own repeat. B and B2 ran the same workload
+# 35 minutes apart and their deltas agree to 3.3%, so the rule compares repeats and allows 10%.
+
+
+def test_two_identical_runs_have_no_drift() -> None:
+    assert throttle_drift(11_859, 11_859) == 0.0
+
+
+def test_drift_is_relative_to_the_mean_of_the_pair() -> None:
+    # 400 apart on a mean of 12,000.
+    assert throttle_drift(11_800, 12_200) == pytest.approx(400 / 12_000)
+
+
+def test_the_measured_b_to_b2_spread_is_within_the_default_tolerance() -> None:
+    assert throttle_drift(11_859, 11_468) < DEFAULT_MAX_THROTTLE_DRIFT
+
+
+def test_drift_does_not_depend_on_the_order_of_the_pair() -> None:
+    assert throttle_drift(2_123, 16_015) == throttle_drift(16_015, 2_123)
+
+
+def test_two_runs_that_never_throttled_are_not_a_division_by_zero() -> None:
+    assert throttle_drift(0, 0) == 0.0
+
+
+def test_one_run_that_throttled_and_one_that_did_not_is_total_drift() -> None:
+    assert throttle_drift(0, 8_000) == 2.0
+
+
+def test_a_negative_delta_is_a_bad_snapshot_pair() -> None:
+    with pytest.raises(ValueError, match="negative"):
+        throttle_drift(-1, 100)
+
+
+def test_a_repeat_within_tolerance_is_consistent() -> None:
+    run = (a_snapshot(package_throttle_count=0), a_snapshot(package_throttle_count=11_859))
+    repeat = (a_snapshot(package_throttle_count=0), a_snapshot(package_throttle_count=11_468))
+
+    consistent, reasons = repeat_is_consistent(run, repeat)
+
+    assert consistent
+    assert reasons == []
+
+
+def test_a_repeat_that_drifted_names_both_deltas() -> None:
+    run = (a_snapshot(package_throttle_count=0), a_snapshot(package_throttle_count=2_000))
+    repeat = (a_snapshot(package_throttle_count=0), a_snapshot(package_throttle_count=16_000))
+
+    consistent, reasons = repeat_is_consistent(run, repeat)
+
+    assert not consistent
+    assert any("2000" in reason and "16000" in reason for reason in reasons)
+
+
+def test_a_repeat_carries_the_environment_checks_of_both_runs() -> None:
+    run = (a_snapshot(), a_snapshot())
+    repeat = (a_snapshot(ac_online=0), a_snapshot(ac_online=0))
+
+    consistent, reasons = repeat_is_consistent(run, repeat)
+
+    assert not consistent
+    assert any("AC power" in reason for reason in reasons)
+
+
+def test_the_absolute_cap_is_off_by_default() -> None:
+    # The chassis reliably throttles five figures during a saturated run. Applying an absolute cap
+    # by default would mark every real run non-citable and teach the reader to ignore the verdict.
+    citable, reasons = is_citable(
+        a_snapshot(package_throttle_count=0),
+        a_snapshot(package_throttle_count=16_015),
+    )
+
+    assert citable
+    assert reasons == []
+
+
+def test_the_absolute_cap_still_applies_when_asked_for() -> None:
+    citable, reasons = is_citable(
+        a_snapshot(package_throttle_count=0),
+        a_snapshot(package_throttle_count=16_015),
+        max_package_delta=1_000,
+    )
+
+    assert not citable
+    assert any("throttle" in reason for reason in reasons)

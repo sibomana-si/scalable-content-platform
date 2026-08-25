@@ -1,6 +1,6 @@
 # Load Test Plan
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-24
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
 
 What M6 measures, on what workload, and under what conditions a number counts.
 
@@ -124,7 +124,7 @@ citable.
 
 ## Measurement hygiene
 
-Four rules. Each removes a way for the numbers to be wrong while looking fine.
+Five rules. Each removes a way for the numbers to be wrong while looking fine.
 
 **Pin the generator to the E-cores.** The k6 service sets `cpuset: "12-19"`, so the generator
 takes the eight E-cores and every P-core stays with the service. This is the largest single
@@ -141,6 +141,13 @@ point is that every run meets the same machine, so the comparisons hold.
 **Treat thermal drift as data.** Record `package_throttle_count` and `core_throttle_count` before
 and after every run. A run whose delta moves materially is flagged and repeated. Keep a fixed
 60-second settle between runs so each starts from the same thermal state.
+
+**Leave the machine alone while a run is in progress.** Start the matrix and touch nothing until
+it ends. The generator holds eight E-cores and the service holds six P-cores, so a shell command,
+an editor, or a test suite takes CPU from one of them. In the first matrix a `python3` read of a
+results file overlapped run B, and that run dropped 301 iterations where the same scenario under
+run A dropped none. The cost of the rule is patience. The cost of breaking it is a number you
+cannot explain.
 
 **Discard the warm-up.** Each run starts with 30 seconds at 50 rps whose results are thrown away.
 It fills the connection pools and the cache, so the measured run does not average a cold start

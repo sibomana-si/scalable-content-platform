@@ -1,6 +1,6 @@
 # Load Test Runbook
 
-> **Status:** 🟨 In progress — sections 5 and 7 are filled by the M6 measurement run · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
+> **Status:** ✅ Complete — executed end to end on 2026-08-22 · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
 
 How to repeat the M6 load test on a cold machine, without having been in the room.
 
@@ -45,7 +45,7 @@ python3 -m venv .venv
 docker compose --profile load run --rm k6 run /scripts/selftest.js
 ```
 
-The selftest takes about one second and needs no other service. Eleven checks must pass. A
+The selftest takes about one second and needs no other service. Fourteen checks must pass. A
 failure there means the hot-set picker is broken, and every latency number a real run produced
 afterwards would be fiction.
 
@@ -67,6 +67,7 @@ What the script does, in order:
 3. Runs the k6 selftest.
 4. Runs A, B, C, and B2 in that order.
 5. Stops the app replicas and the load balancer, and restores `balanced`.
+6. Lists every scenario that crossed a threshold.
 
 Each of the four runs then repeats the same seven steps: a machine-state snapshot, a stack start
 at the run's replica count and cache setting, a seed to 10,000 articles, a 30-second warm-up whose
@@ -80,6 +81,10 @@ verdict, and a 60-second settle.
 | C | on | 3 | Whether throughput scales with replicas, or a shared-state ceiling appears. |
 | B2 | on | 1 | A repeat of B. The spread between B and B2 is the noise floor. |
 
+Start the matrix and then leave the machine alone. The generator holds the eight E-cores and the
+service holds the six P-cores, so any command you run competes with one of them. A single shell
+command during a run is enough to drop iterations and make that run non-citable.
+
 B2 is not redundant. Every comparison in the report is a difference between two runs on a shared
 laptop, and a difference smaller than the B-to-B2 spread is drift, not a result.
 
@@ -89,7 +94,8 @@ To run part of the matrix, name the runs:
 MATRIX_RUNS="B C" scripts/run_load_matrix.sh 2026-08-22-scaleout
 ```
 
-Wall-clock cost of a full matrix: 🟨 _recorded during the M6 measurement run (Task 2)._
+Wall-clock cost of a full matrix: **68.5 minutes** for `A B C B2` on an i7-12700H, measured on
+2026-08-22. Budget more than an hour, and start it when you do not need the machine.
 
 ## Running one scenario by hand
 
@@ -179,19 +185,44 @@ each run, and you can repeat it for any pair of snapshots:
 The remaining checks are manual:
 
 ```bash
-curl -s localhost:9090/api/v1/targets | grep -c '"health":"up"'
-curl -s 'localhost:9090/api/v1/query?query=sum(rate(cache_hits_total[5m]))/sum(rate(cache_hits_total[5m])%2Brate(cache_misses_total[5m]))'
-curl -s 'localhost:9090/api/v1/query?query=sum(rate(http_requests_total[5m]))'
+curl -s 'localhost:9090/api/v1/targets?scrapePool=content-platform-replicas' \
+  | grep -c '"health":"up"'
+curl -s 'localhost:9090/api/v1/query' \
+  --data-urlencode 'query=sum by (entity) (increase(cache_hits_total[5m]))'
+curl -s 'localhost:9090/api/v1/query' \
+  --data-urlencode 'query=sum by (entity) (increase(cache_misses_total[5m]))'
+curl -s 'localhost:9090/api/v1/query' \
+  --data-urlencode 'query=sum(increase(http_requests_total[5m]))'
 ```
+
+Count the targets in the `content-platform-replicas` pool alone, not every target Prometheus
+holds. The separate `content-platform` job points at a uvicorn process on the host, which is down
+by design while the stack runs under compose. A count across all pools therefore reads one short
+and looks like a lost replica.
+
+Judge the cache by entity, never blended. Run B measured 82% on `article` against 10% on `list`,
+and the blend of 68% describes neither. A blended figure inside a pass band can hide a list cache
+that does nothing.
 
 | # | Check | Pass band | A failure means |
 |---|---|---|---|
-| 1 | Prometheus targets up | 🟨 _pending Task 2_ | A replica is unscraped, so the server-side metrics cover only part of the fleet. |
-| 2 | Cache hit ratio during run B | 🟨 _pending Task 2_ | The hot-set picker is wrong, not the cache. |
-| 3 | k6 `dropped_iterations` | zero | The generator could not hold the offered rate. The run measured the laptop. |
-| 4 | k6 `http_reqs` against the Prometheus request rate | 🟨 _pending Task 2_ | Requests die at nginx and never reach the app. |
-| 5 | Package throttle delta | 🟨 _pending Task 2_ | The chassis moved during the run. |
-| 6 | `powerprofilesctl get` after the last run | `performance` | `power-profiles-daemon` reverted mid-matrix, silently. |
+| 1 | Targets up in the `content-platform-replicas` pool | equal to `--scale app=N` | A replica is unscraped, so the server-side metrics cover only part of the fleet. |
+| 2 | `article` cache hit ratio during run B | 78% to 88% | The hot-set picker is wrong, not the cache. Measured 82.1%, 82.2% and 82.3% across B, C and B2. |
+| 3 | `list` cache hit ratio during run B | 5% to 15% | The list generation counter changed behavior. Measured 9.6%, 9.5% and 9.4%. The low value is expected, not a fault. |
+| 4 | k6 `dropped_iterations` on `steady.js` | zero | The generator could not hold the offered rate. The run measured the laptop. Applies to `steady.js` only: `ramp.js` and `spike.js` run past the knee on purpose, where drops are the result. |
+| 5 | k6 `http_reqs` against the Prometheus request count, `steady.js` | within 0.1% | Requests die at nginx and never reach the app. Measured 0.00% to 0.01% across the four runs. |
+| 6 | Package throttle delta, run against repeat | within 10% | The machine drifted between a run and its repeat, so the pair does not set a noise floor. Measured 3.3% for B against B2. |
+| 7 | `powerprofilesctl get` after the last run | `performance` | `power-profiles-daemon` reverted mid-matrix, silently. |
+
+Check 5 holds for `steady.js` only. Under `ramp.js` and `spike.js` the two counts disagree by
+design: the ramp loses 1% to 3% of requests at connection level past the knee, and the spike
+window is short enough that the Prometheus range extrapolation overshoots by about 7% in every
+run. Neither number invalidates a saturated run, because a saturated run is not a latency
+measurement in the first place.
+
+Check 6 replaced an absolute cap of 1,000 throttle events, which failed all four runs of the
+first matrix and carried no information. See the [bottleneck
+analysis](bottleneck-analysis.md) for the measurement that motivated the change.
 
 ## Teardown and restoring the machine
 
@@ -222,9 +253,23 @@ above zero in the JSON.
 **Cause.** The generator could not start iterations fast enough to hold the offered rate. Either
 `maxVUs` is too low for the latency the server is showing, or the eight E-cores are not enough.
 
-**Fix.** Raise `MAX_VUS` first. If the drops persist, widen `K6_CPUSET` and record the change in
-the report, because the generator then competes with the system under test. The run that dropped
-iterations is void either way.
+**Fix.** Read the active VU count in the k6 progress line first. If it sits far below `maxVUs`,
+the VU pool is not the constraint and raising `MAX_VUS` changes nothing: the generator lost CPU
+time. Check that nothing else ran on the host during the run. If the drops persist on an idle
+host, widen `K6_CPUSET` and record the change in the report, because the generator then competes
+with the system under test. The run that dropped iterations is void either way.
+
+### The matrix stops in the middle
+
+**Symptom.** The matrix ends after one scenario, later runs never start, and the last k6 line
+reads `thresholds on metrics '...' have been crossed`.
+
+**Cause.** k6 exits 99 when a threshold is crossed, and the matrix runs under `set -e`. Before
+this behavior was fixed, that exit code ended the whole matrix.
+
+**Fix.** Confirm `k6_run` in `scripts/run_load_matrix.sh` maps exit 99 to a recorded verdict. A
+crossed threshold is a measurement: the matrix exists to find where the targets stop holding. Any
+other non-zero exit code is a real fault and stops the matrix on purpose.
 
 ### Prometheus shows no replica targets
 
@@ -283,7 +328,18 @@ docker compose up -d
 .venv/bin/python scripts/seed_load_dataset.py --articles 10000
 ```
 
-🟨 _Task 2 adds the failures actually met during the measurement run._
+### Failures met during the M6 run
+
+Two of the entries above are not hypothetical. The 2026-08-22 matrix hit both.
+
+**The matrix stopped in the middle.** k6 crossed `dropped_iterations: ['count==0']` on run B, exited
+99, and `set -euo pipefail` ended the script. The fix in `run_load_matrix.sh` now records a crossed
+threshold and continues, because a crossed threshold is a measurement.
+
+**Dropped iterations with the generator idle.** Run B dropped 301 iterations while 105 of 107 VUs
+sat idle. Neither the generator nor the server was the limit: shell commands run during the window
+took CPU from the generator. The re-run with the machine left alone dropped zero. This is the
+reason for the hands-off rule above.
 
 ## Parameter reference
 

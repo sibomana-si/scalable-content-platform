@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `docs/performance/bottleneck-analysis.md` records what the four-run matrix of 2026-08-22
+  measured, ranked by cost. The headline is that **one app replica saturates near 430 rps and the
+  cache does not raise that ceiling**: the cached knee (434 rps) and the uncached knee (429 rps)
+  fall in the same rate step, while three replicas carry 509 rps at a P95 of 16.3 ms with no bend.
+  The limit is CPU inside the application, not MySQL — query P95 holds at 0.96–1.00 ms from 200 rps
+  to 509 rps — and not Redis, which logged zero errors. The largest lever on that CPU is the list
+  endpoint: one page of 20 items is 101,367 bytes, of which **96.7% is article body text**, and the
+  list route costs 4.4x the detail route at every load level in all four runs.
+- Two measurements that contradict a written assumption. The list cache serves **9.5% of list
+  reads** against 82% for articles, so the blended 68% describes neither half — the accepted cost of
+  the [ADR-0010](architecture/adr/0010-generation-counter-list-invalidation.md) generation counter, now with
+  a number. And the ≥ 90% hit ratio target cannot hold under the 80/20 skew the plan specifies: the
+  cold tail caps the achievable ratio near 82%. The target moves to fit the workload, not the other
+  way round.
+- `docs/architecture/capacity-scaling-model.md` gains a "What the M6 matrix found" table against
+  B1–B6. B1, B2 and B4 did not appear. B3 appeared, but on one replica with the cache off rather
+  than at the predicted 8+ replicas. The limit that arrives first is not on the list.
+- The load test runbook is complete: a full matrix costs **68.5 minutes**, and the two failures met
+  during the run — a matrix stopped by a crossed threshold, and dropped iterations caused by shell
+  commands run during a window — are written down with their fixes.
+
 - k6 load tests behind a `load` compose profile (M6). `tests/load/` holds three open-model
   scenarios — `steady.js` at a constant arrival rate with the NFR targets as thresholds, `ramp.js`
   to find the knee, and `spike.js` to measure degradation and recovery. All three are arrival-rate

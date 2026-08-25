@@ -38,9 +38,21 @@ REQUIRED_KEYS = frozenset(
     }
 )
 
-# The chassis throttles routinely on this hardware, so zero is not a realistic bar. The number
-# that matters is whether the delta is small next to the spread between two repeats of run B.
-DEFAULT_MAX_PACKAGE_DELTA = 1_000
+# An absolute throttle cap is off by default, because the first matrix measured what it was
+# guessing at. Four runs on this chassis produced package deltas of 16,015 (A), 11,859 (B),
+# 2,123 (C) and 11,468 (B2). The spread tracks how long each run spent saturated, not how far the
+# environment moved: run A drove every read to MySQL and throttled most, run C never reached its
+# knee and throttled least. A cap of any value therefore marks the run that finds the bottleneck
+# as the least trustworthy, which is backwards.
+#
+# Drift lives in a different pair: a run against its own repeat. B and B2 ran the same workload
+# 35 minutes apart, and their deltas agree to 3.3%. `repeat_is_consistent` applies that rule with
+# a tolerance of 10%, three times the observed spread. Pass `max_package_delta` to `is_citable`
+# only to answer a specific question about one run.
+DEFAULT_MAX_PACKAGE_DELTA = None
+
+# Three times the measured B-to-B2 spread of 3.3%.
+DEFAULT_MAX_THROTTLE_DRIFT = 0.10
 
 
 class MetadataError(ValueError):
@@ -79,7 +91,7 @@ def throttle_delta(before: dict, after: dict) -> dict[str, int]:
 
 
 def is_citable(
-    before: dict, after: dict, *, max_package_delta: int = DEFAULT_MAX_PACKAGE_DELTA
+    before: dict, after: dict, *, max_package_delta: int | None = DEFAULT_MAX_PACKAGE_DELTA
 ) -> tuple[bool, list[str]]:
     """Decide whether the pair of snapshots supports a citable result.
 
@@ -102,10 +114,60 @@ def is_citable(
         reasons.append(
             f"the generator cpuset moved from {before['k6_cpuset']!r} to {after['k6_cpuset']!r}"
         )
-    delta = throttle_delta(before, after)
-    if delta["package"] > max_package_delta:
+    if max_package_delta is not None:
+        delta = throttle_delta(before, after)
+        if delta["package"] > max_package_delta:
+            reasons.append(
+                f"the package throttle count rose by {delta['package']}, above the "
+                f"{max_package_delta} limit: the chassis moved during the run"
+            )
+    return not reasons, reasons
+
+
+def throttle_drift(first_delta: int, second_delta: int) -> float:
+    """How far two runs of the same workload disagree about how much the chassis throttled.
+
+    The result is the difference over the mean of the pair, so it reads as a fraction: 0.0 for
+    two identical runs, 2.0 when one run throttled and the other did not at all. Order does not
+    matter.
+    """
+
+    if first_delta < 0 or second_delta < 0:
+        raise ValueError(
+            f"a throttle delta cannot be negative, got {first_delta} and {second_delta}: "
+            "the snapshots are out of order or come from different runs"
+        )
+    total = first_delta + second_delta
+    if total == 0:
+        return 0.0
+    return abs(first_delta - second_delta) / (total / 2)
+
+
+def repeat_is_consistent(
+    run: tuple[dict, dict],
+    repeat: tuple[dict, dict],
+    *,
+    max_drift: float = DEFAULT_MAX_THROTTLE_DRIFT,
+) -> tuple[bool, list[str]]:
+    """Decide whether a run and its repeat met the same machine.
+
+    Both runs must pass their own environment checks, and their throttle deltas must agree. This
+    is the rule that an absolute cap cannot express: it holds the workload fixed, so anything left
+    over is drift.
+    """
+
+    reasons: list[str] = []
+    for label, (before, after) in (("run", run), ("repeat", repeat)):
+        _, run_reasons = is_citable(before, after)
+        reasons.extend(f"{label}: {reason}" for reason in run_reasons)
+
+    first = throttle_delta(*run)["package"]
+    second = throttle_delta(*repeat)["package"]
+    drift = throttle_drift(first, second)
+    if drift > max_drift:
         reasons.append(
-            f"the package throttle count rose by {delta['package']}, above the "
-            f"{max_package_delta} limit: the chassis moved during the run"
+            f"the package throttle count moved {drift:.1%} between the run and its repeat "
+            f"({first} against {second}), above the {max_drift:.0%} limit: the machine drifted "
+            "between them, so the pair does not set a noise floor"
         )
     return not reasons, reasons

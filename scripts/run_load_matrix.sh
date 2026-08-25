@@ -43,6 +43,12 @@ export ARTICLE_ID_MIN="${ARTICLE_ID_MIN:-1}"
 
 say() { printf '\n=== %s\n' "$*"; }
 
+# k6 exits 99 when a threshold is crossed. A crossed threshold is a measurement, not a broken
+# run — the matrix exists to find where the targets stop holding — so the run is recorded and the
+# matrix goes on. Every other non-zero status is a real failure and stops the matrix.
+K6_THRESHOLD_EXIT=99
+THRESHOLD_CROSSED=()
+
 k6_run() {
   # $1 script, $2 run id, rest: extra environment as NAME=VALUE
   local script="$1" run_id="$2"
@@ -52,8 +58,15 @@ k6_run() {
   for pair in "$@"; do
     env_args+=(--env "$pair")
   done
+  local status=0
   RUN_ID="$run_id" docker compose --profile load run --rm \
-    -e "RUN_ID=$run_id" k6 run "${env_args[@]}" "/scripts/$script"
+    -e "RUN_ID=$run_id" k6 run "${env_args[@]}" "/scripts/$script" || status=$?
+  if [ "$status" -eq "$K6_THRESHOLD_EXIT" ]; then
+    THRESHOLD_CROSSED+=("${run_id} ${script}")
+    echo "threshold crossed in ${run_id} (${script}) · recorded, the matrix continues"
+    return 0
+  fi
+  return "$status"
 }
 
 stack_up() {
@@ -88,6 +101,28 @@ if citable:
 else:
     for reason in reasons:
         print(f"NOT CITABLE: {reason}")
+PY
+}
+
+
+judge_repeat() {
+  # The drift rule needs a run and its repeat. Only the B and B2 pair holds the workload fixed.
+  local first="$1" second="$2"
+  "$PYTHON" - "$RESULTS_DIR/${first}" "$RESULTS_DIR/${second}" <<'PY'
+import sys
+from scripts.run_metadata import load, repeat_is_consistent, throttle_delta
+
+stem_a, stem_b = sys.argv[1], sys.argv[2]
+run = (load(f"{stem_a}-before.json"), load(f"{stem_a}-after.json"))
+repeat = (load(f"{stem_b}-before.json"), load(f"{stem_b}-after.json"))
+first, second = throttle_delta(*run)["package"], throttle_delta(*repeat)["package"]
+consistent, reasons = repeat_is_consistent(run, repeat)
+print(f"repeat check: package deltas {first} against {second}")
+if consistent:
+    print("the run and its repeat met the same machine")
+else:
+    for reason in reasons:
+        print(f"REPEAT DRIFTED: {reason}")
 PY
 }
 
@@ -152,7 +187,19 @@ main() {
     esac
   done
 
+  if [ -f "$RESULTS_DIR/${MATRIX_ID}-B-after.json" ] &&
+     [ -f "$RESULTS_DIR/${MATRIX_ID}-B2-after.json" ]; then
+    say "noise floor: run B against run B2"
+    judge_repeat "${MATRIX_ID}-B" "${MATRIX_ID}-B2"
+  fi
+
   say "matrix ${MATRIX_ID} complete · results in ${RESULTS_DIR}"
+  if [ "${#THRESHOLD_CROSSED[@]}" -eq 0 ]; then
+    echo "no thresholds crossed"
+  else
+    echo "thresholds crossed in ${#THRESHOLD_CROSSED[@]} scenario runs:"
+    printf '  %s\n' "${THRESHOLD_CROSSED[@]}"
+  fi
   docker compose stop app nginx
 }
 
