@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- **Breaking, inside `/v1`:** `GET /v1/articles` items no longer carry `body`. A page of 20 items
+  fell from **101,367 bytes to 2,935**, and a cached page in Redis from 23.5 KB to 3.67 KB. Read
+  one article to get its text. `updated_at` still travels with each item, so a list page is still
+  a source of `If-Match` tokens. The project is pre-1.0 with no external consumers, so the break
+  ships in `/v1` and is recorded in the
+  [versioning policy](api/versioning-policy.md) rather than hidden. A list page cached before the
+  change decodes into the new shape and expires on its own TTL, so no cache flush is needed.
+- The `2026-08-22-projection` matrix measured what that bought, against the baseline pair as the
+  noise floor: server-side `GET /v1/articles` p95 **−33%** at 200 rps (8.26 → 5.53 ms) and −27%
+  under the ramp, `GET /v1/articles/{id}` **−25%** under the ramp although nothing about it
+  changed, `PUT` **−27%**, client-side read p95 **−79%** on the ramp and −70% on the spike, and
+  dropped iterations down from 183 and 220 to 8 and 41. The detail read is the control: at 200 rps,
+  where the event loop is not contended, it does not move at all.
+- The ceiling, however, held. Peak throughput went from a mean of 467.5 rps to 481.9 rps, **+3%**
+  against a pair spread of 1.3%. One replica saturates near 430 rps whatever the payload, which
+  confirms finding F1: capacity on this service is bought with replicas, not with bytes.
+- List invalidation (finding F3) was reconsidered after the projection and **left as
+  [ADR-0010](architecture/adr/0010-generation-counter-list-invalidation.md) specifies**. The
+  remaining cost of a 9.5% list hit ratio is about 34 ms of database wait per second, against a
+  database that runs at a flat 1 ms p95 from 200 rps to 509 rps. Neither available fix is free:
+  unfiltered pages cannot be scoped per author, and an absolute TTL would break the read-your-writes
+  promise in `docs/data/caching-strategy.md`. A 9.5% ratio is the measured price of a correctness
+  guarantee, not a defect.
+
 ### Added
 - `docs/performance/bottleneck-analysis.md` records what the four-run matrix of 2026-08-22
   measured, ranked by cost. The headline is that **one app replica saturates near 430 rps and the
@@ -14,7 +39,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   The limit is CPU inside the application, not MySQL — query P95 holds at 0.96–1.00 ms from 200 rps
   to 509 rps — and not Redis, which logged zero errors. The largest lever on that CPU is the list
   endpoint: one page of 20 items is 101,367 bytes, of which **96.7% is article body text**, and the
-  list route costs 4.4x the detail route at every load level in all four runs.
+  list read costs 1.7x the detail read while returning 20 times the rows. (An earlier draft of that
+  entry said 4.4x. The query filtered on `route` alone, and the route label carries no method, so
+  it blended the list read with `POST` create. Every latency figure now names its method.)
 - Two measurements that contradict a written assumption. The list cache serves **9.5% of list
   reads** against 82% for articles, so the blended 68% describes neither half — the accepted cost of
   the [ADR-0010](architecture/adr/0010-generation-counter-list-invalidation.md) generation counter, now with
