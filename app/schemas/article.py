@@ -21,19 +21,30 @@ class ArticleIn(BaseModel):
     body: str = Field(min_length=1, max_length=MAX_BODY_LENGTH)
 
 
-class ArticleOut(BaseModel):
+class ArticleSummaryOut(BaseModel):
+    """Everything about an article except its text.
+
+    This is the list shape. Bodies are the whole cost of a list page, and a reader
+    who scans titles pays for text nobody displays. Ask for an article to get its body.
+    """
+
     model_config = ConfigDict(from_attributes=True)
 
     id: int
     author_id: int
     title: str
-    body: str
     created_at: datetime
     # doubles as the optimistic-concurrency token clients echo back via If-Match.
     updated_at: datetime
 
 
+class ArticleOut(ArticleSummaryOut):
+    """The detail shape: a summary plus the text."""
+
+    body: str
+
+
 class ArticleListOut(BaseModel):
-    items: list[ArticleOut]
+    items: list[ArticleSummaryOut]
     # Opaque keyset cursor for the next page; null on the last page
     next_cursor: str | None

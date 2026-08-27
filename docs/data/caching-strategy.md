@@ -1,6 +1,6 @@
 # Caching Strategy
 
-> **Status:** ✅ Implemented · **Owner:** Simon Sibomana · **Last updated:** 2026-08-19
+> **Status:** ✅ Implemented · **Owner:** Simon Sibomana · **Last updated:** 2026-08-27
 
 Redis cache-aside for hot reads, with invalidation on writes. The cache is an optimization and
 never a dependency: every path degrades to MySQL. See
@@ -29,6 +29,12 @@ compare-and-set precondition.
 
 `filterhash` is a 16-character SHA-256 digest of the page size and the decoded keyset cursor, so
 two different page windows never share a key.
+
+A cached list page holds summaries, not articles. It carries `id`, `author_id`, `title`,
+`created_at` and `updated_at` per item, and no `body`. Before the projection a 20-item page
+averaged 23.5 KB in Redis against 4.7 KB for an article detail key
+([bottleneck analysis](../performance/bottleneck-analysis.md), F2), which made list pages the
+larger half of the working set while serving under 10% of list reads.
 
 The builders live in `app/cache/keys.py`, are pure, and are unit-tested in
 `tests/unit/test_cache_keys.py`.

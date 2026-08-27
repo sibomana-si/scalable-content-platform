@@ -171,3 +171,75 @@ async def test_invalid_cursor_is_422(client, bad_cursor):
 async def test_empty_database_returns_empty_page(client):
     data = (await client.get(BASE)).json()
     assert data == {"items": [], "next_cursor": None}
+
+
+# --- the summary shape ------------------------------------------------------------------------
+#
+# A list page carries no article bodies. The M6 matrix measured a 20-item page at 101,367 bytes,
+# 96.7% of it body text, and the list route at 4.4x the cost of the detail route
+# (`docs/performance/bottleneck-analysis.md`, finding F2). A reader who wants the text asks for
+# one article.
+
+
+SUMMARY_KEYS = {"id", "author_id", "title", "created_at", "updated_at"}
+
+
+async def test_list_items_carry_no_body(client, user_factory, article_factory):
+    author = await user_factory()
+    await article_factory(author=author, body="x" * 5_000, created_at=T0)
+
+    items = (await client.get(BASE)).json()["items"]
+
+    assert "body" not in items[0]
+
+
+async def test_list_items_carry_every_other_field(client, user_factory, article_factory):
+    author = await user_factory()
+    await article_factory(author=author, created_at=T0)
+
+    items = (await client.get(BASE)).json()["items"]
+
+    assert set(items[0]) == SUMMARY_KEYS
+
+
+async def test_author_filtered_list_items_carry_no_body(client, user_factory, article_factory):
+    alice = await user_factory()
+    await article_factory(author=alice, body="x" * 5_000, created_at=T0)
+
+    items = (await client.get(BASE, params={"author": alice.id})).json()["items"]
+
+    assert set(items[0]) == SUMMARY_KEYS
+
+
+async def test_a_second_page_carries_no_body(client, user_factory, article_factory):
+    """The projection holds past the first page, which is served from a different key."""
+    author = await user_factory()
+    for i in range(4):
+        await article_factory(author=author, created_at=T0 + timedelta(seconds=i))
+
+    first = (await client.get(BASE, params={"limit": 2})).json()
+    second = (await client.get(BASE, params={"limit": 2, "cursor": first["next_cursor"]})).json()
+
+    assert set(second["items"][0]) == SUMMARY_KEYS
+
+
+async def test_the_detail_endpoint_still_returns_the_body(client, user_factory, article_factory):
+    author = await user_factory()
+    article = await article_factory(author=author, body="the whole text", created_at=T0)
+
+    detail = (await client.get(f"{BASE}/{article.id}")).json()
+
+    assert detail["body"] == "the whole text"
+
+
+async def test_a_list_page_is_smaller_than_the_articles_it_names(
+    client, user_factory, article_factory
+):
+    """The measurement, as an assertion: the page no longer scales with body size."""
+    author = await user_factory()
+    for i in range(5):
+        await article_factory(author=author, body="x" * 5_000, created_at=T0 + timedelta(seconds=i))
+
+    page = (await client.get(BASE)).content
+
+    assert len(page) < 5_000
