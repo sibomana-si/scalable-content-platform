@@ -1,6 +1,6 @@
 # Capacity & Scaling Model
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-27
 
 Back-of-the-envelope sizing that justifies the scaling claims. These are **planning numbers, not
 commitments** — each is validated (or corrected) by the M6 load test, and this document is updated
@@ -137,6 +137,13 @@ The matrix found a limit the list does not name, and it bites before any of them
 replica saturates near 430 rps, and the cache does not raise that ceiling** (finding F1). The cost
 is CPU inside the application — object construction, validation, and serialization — not the
 database and not the cache. Add it to the list as B0, the limit that arrives first.
+
+B0 was then tested directly. Removing article bodies from list responses cut the payload by 97%
+and list read latency by a third, and the peak rate moved from a mean of 467.5 rps to 481.9 rps —
+**3%**. The ceiling holds while the work under it gets cheaper, which settles the scaling
+question: on this service you buy throughput with replicas, not with payload. The replica
+arithmetic at the top of this page is therefore the right instrument, and per-replica capacity is
+the number to keep measuring.
 
 The deliberate MVP position: **scale the stateless tier horizontally, shield the stateful tier with
 the cache, and document — rather than build — the next rung of each ladder** until measurements
