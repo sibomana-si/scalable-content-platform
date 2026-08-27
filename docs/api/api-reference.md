@@ -48,10 +48,23 @@ Responses are `{"items": [...], "next_cursor": "..."}`; `next_cursor` is `null` 
 last page. Cursors encode the last row's `(created_at, id)` position, so a walk never
 duplicates or skips rows even as new articles are created ahead of the cursor.
 
+### List items carry no body
+
+An item in `items` holds `id`, `author_id`, `title`, `created_at` and `updated_at`. It does
+**not** hold `body`. To read the text, call `GET /v1/articles/{id}`.
+
+The reason is measured. A 20-item page that carried bodies was 101,367 bytes, of which 96.7%
+was body text, and the list route cost 4.4 times the detail route at every load level of the
+M6 test ([bottleneck analysis](../performance/bottleneck-analysis.md), finding F2). Almost
+every client that lists articles renders titles.
+
+`updated_at` still travels with each item, so a client can compare versions from a list page
+and can use the value as the `If-Match` token without a re-read.
+
 ## Endpoints (summary)
 | Method | Path | Auth        | Description                              |
 |---|---|-------------|------------------------------------------|
-| GET | `/v1/articles` | **public**  | List (paginated)                         |
+| GET | `/v1/articles` | **public**  | List (paginated, no bodies)              |
 | GET | `/v1/articles/{id}` | **public**  | Read one                                 |
 | POST | `/v1/articles` | user        | Create (author = caller)                 |
 | PUT | `/v1/articles/{id}` | owner/admin | Full replace; requires `If-Match`        |

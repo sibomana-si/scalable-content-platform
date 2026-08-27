@@ -24,7 +24,7 @@ from app.db.after_commit import after_commit
 from app.models import Article, User
 from app.observability.tracing import traced
 from app.repositories.article_repo import ArticleRepository
-from app.schemas.article import ArticleOut
+from app.schemas.article import ArticleOut, ArticleSummaryOut
 from app.services.exceptions import ArticleNotFoundError, ConflictError, ForbiddenError
 
 # How often a single-flight loser re-reads the key while the winner loads.
@@ -95,11 +95,14 @@ class ArticleService:
 
     async def list_articles(
         self, *, limit: int, after: tuple[datetime, int] | None = None, author_id: int | None = None
-    ) -> tuple[list[ArticleOut], tuple[datetime, int] | None]:
+    ) -> tuple[list[ArticleSummaryOut], tuple[datetime, int] | None]:
         """One page plus the keyset position of the next, or ``None`` on the last page.
 
         The page key embeds the current generation counter, so a write invalidates every page
         it can affect with one ``INCR``.
+
+        The page carries summaries, never bodies. That decision belongs here as much as in the
+        schema: it is what keeps a cached page near 3 KB instead of 23 KB.
         """
         async with traced("articles", "list", limit=limit, paged=after is not None):
             global_gen, author_gen = await self._cache.get_generations(author_id=author_id)
@@ -189,7 +192,7 @@ class ArticleService:
 
     async def _load_page(
         self, *, limit: int, after: tuple[datetime, int] | None, author_id: int | None
-    ) -> tuple[list[ArticleOut], tuple[datetime, int] | None]:
+    ) -> tuple[list[ArticleSummaryOut], tuple[datetime, int] | None]:
         """One page from the database.
 
         Fetches ``limit + 1`` rows; the sentinel row proves another page exists without a
@@ -197,10 +200,10 @@ class ArticleService:
         """
         rows = await self._articles.list(limit=limit + 1, after=after, author_id=author_id)
         if len(rows) <= limit:
-            return [ArticleOut.model_validate(row) for row in rows], None
+            return [ArticleSummaryOut.model_validate(row) for row in rows], None
         page = rows[:limit]
         last = page[-1]
-        return [ArticleOut.model_validate(row) for row in page], (last.created_at, last.id)
+        return [ArticleSummaryOut.model_validate(row) for row in page], (last.created_at, last.id)
 
     async def _await_loader(self, key: str) -> str | None:
         """Wait, bounded, for the single-flight winner to populate ``key``.
@@ -257,7 +260,7 @@ def _decode_article(body: str | None) -> ArticleOut | None:
         return None
 
 
-def _encode_page(items: list[ArticleOut], next_after: tuple[datetime, int] | None) -> str:
+def _encode_page(items: list[ArticleSummaryOut], next_after: tuple[datetime, int] | None) -> str:
     """Serialize a list page, cursor position included.
 
     The next-page position travels with the page. Caching the rows alone would serve a page
@@ -272,13 +275,17 @@ def _encode_page(items: list[ArticleOut], next_after: tuple[datetime, int] | Non
 
 def _decode_page(
     body: str | None,
-) -> tuple[list[ArticleOut], tuple[datetime, int] | None] | None:
-    """Parse a cached list page, treating anything unparsable as a miss."""
+) -> tuple[list[ArticleSummaryOut], tuple[datetime, int] | None] | None:
+    """Parse a cached list page, treating anything unparsable as a miss.
+
+    A page written before the summary projection carries a ``body`` per item. Pydantic ignores
+    the extra field, so the older entry decodes into the new shape and expires on its own TTL.
+    """
     if body is None:
         return None
     try:
         payload = json.loads(body)
-        items = [ArticleOut.model_validate(item) for item in payload["items"]]
+        items = [ArticleSummaryOut.model_validate(item) for item in payload["items"]]
         raw_next = payload["next"]
     except (ValueError, KeyError, TypeError, ValidationError):
         return None

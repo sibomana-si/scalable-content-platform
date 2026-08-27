@@ -8,7 +8,7 @@ from fastapi import APIRouter, Header, Query, Response
 
 from app.api.deps import ArticleServiceDep, CurrentUser
 from app.api.pagination import DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE, decode_cursor, encode_cursor
-from app.schemas.article import ArticleIn, ArticleListOut, ArticleOut
+from app.schemas.article import ArticleIn, ArticleListOut, ArticleOut, ArticleSummaryOut
 from app.services.exceptions import PreconditionRequiredError
 
 router = APIRouter(prefix="/v1/articles", tags=["articles"])
@@ -53,7 +53,7 @@ async def list_articles(
     items, next_after = await service.list_articles(limit=limit, after=after, author_id=author)
     next_cursor = encode_cursor(*next_after) if next_after is not None else None
     return ArticleListOut(
-        items=[ArticleOut.model_validate(item) for item in items], next_cursor=next_cursor
+        items=[ArticleSummaryOut.model_validate(item) for item in items], next_cursor=next_cursor
     )
 
 
