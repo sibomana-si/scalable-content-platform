@@ -24,7 +24,8 @@
   },
   "scenarios": {
     "steady": {
-      "rate_rps": 200,
+      "_comment": "350 rps is about 80% of the measured single-replica knee (~430 rps). See the operating-point note in docs/performance/load-test-plan.md.",
+      "rate_rps": 350,
       "duration": "5m",
       "pre_allocated_vus": 100,
       "max_vus": 600

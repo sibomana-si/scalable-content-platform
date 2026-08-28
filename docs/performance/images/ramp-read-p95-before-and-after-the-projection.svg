@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="100%" role="img" aria-label="Read p95 through the ramp, one replica">
+<style>.bg{fill:#ffffff}.fg{fill:#1a1a1a}.grid{stroke:#d8d8d8}.tick{fill:#5a5a5a;font-size:11px}.ttl{font-size:14px;font-weight:600}.lbl{font-size:11px}text{font-family:-apple-system,Segoe UI,Roboto,sans-serif}@media (prefers-color-scheme: dark){.bg{fill:#161616}.fg{fill:#ededed}.grid{stroke:#3a3a3a}.tick{fill:#a8a8a8}}</style>
+<rect class="bg" width="760" height="300"/>
+<text class="fg ttl" x="64" y="24">Read p95 through the ramp, one replica</text>
+<line class="grid" x1="64" y1="248.0" x2="744" y2="248.0"/>
+<text class="tick" x="56" y="252.0" text-anchor="end">0.00</text>
+<line class="grid" x1="64" y1="197.0" x2="744" y2="197.0"/>
+<text class="tick" x="56" y="201.0" text-anchor="end">22.9</text>
+<line class="grid" x1="64" y1="146.0" x2="744" y2="146.0"/>
+<text class="tick" x="56" y="150.0" text-anchor="end">45.8</text>
+<line class="grid" x1="64" y1="95.0" x2="744" y2="95.0"/>
+<text class="tick" x="56" y="99.0" text-anchor="end">68.7</text>
+<line class="grid" x1="64" y1="44.0" x2="744" y2="44.0"/>
+<text class="tick" x="56" y="48.0" text-anchor="end">91.6</text>
+<polyline fill="none" stroke="#d62728" stroke-width="2" stroke-linejoin="round" points="64.0,237.3 88.3,237.2 112.6,237.3 136.9,237.1 161.1,237.2 185.4,237.3 209.7,237.3 234.0,237.3 258.3,237.2 282.6,237.2 306.9,237.1 331.1,237.2 355.4,236.9 379.7,232.6 404.0,232.5 428.3,232.4 452.6,230.2 476.9,230.9 501.1,229.8 525.4,227.6 549.7,225.4 574.0,212.6 598.3,213.5 622.6,201.5 646.9,145.9 671.1,130.8 695.4,47.0 719.7,44.0 744.0,62.8"/>
+<rect x="64" y="277" width="10" height="10" fill="#d62728"/>
+<text class="fg lbl" x="80" y="286">before: list pages carry bodies</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" stroke-linejoin="round" points="64.0,237.4 88.3,237.4 112.6,237.3 136.9,237.3 161.1,237.4 185.4,237.4 209.7,237.3 234.0,237.3 258.3,237.3 282.6,237.3 306.9,237.3 331.1,237.2 355.4,237.1 379.7,236.9 404.0,236.3 428.3,233.7 452.6,233.6 476.9,231.2 501.1,229.1 525.4,229.8 549.7,227.5 574.0,226.4 598.3,209.1 622.6,210.7 646.9,178.3 671.1,102.6 695.4,90.9 719.7,137.6 744.0,107.4"/>
+<rect x="234" y="277" width="10" height="10" fill="#1f77b4"/>
+<text class="fg lbl" x="250" y="286">after: list pages carry summaries</text>
+<text class="fg lbl" x="64" y="268">seconds into the run</text>
+<text class="fg lbl" x="14" y="146" transform="rotate(-90 14 146)" text-anchor="middle">milliseconds</text>
+</svg>

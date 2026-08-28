@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="100%" role="img" aria-label="Served throughput through the ramp">
+<style>.bg{fill:#ffffff}.fg{fill:#1a1a1a}.grid{stroke:#d8d8d8}.tick{fill:#5a5a5a;font-size:11px}.ttl{font-size:14px;font-weight:600}.lbl{font-size:11px}text{font-family:-apple-system,Segoe UI,Roboto,sans-serif}@media (prefers-color-scheme: dark){.bg{fill:#161616}.fg{fill:#ededed}.grid{stroke:#3a3a3a}.tick{fill:#a8a8a8}}</style>
+<rect class="bg" width="760" height="300"/>
+<text class="fg ttl" x="64" y="24">Served throughput through the ramp</text>
+<line class="grid" x1="64" y1="248.0" x2="744" y2="248.0"/>
+<text class="tick" x="56" y="252.0" text-anchor="end">0.00</text>
+<line class="grid" x1="64" y1="197.0" x2="744" y2="197.0"/>
+<text class="tick" x="56" y="201.0" text-anchor="end">252</text>
+<line class="grid" x1="64" y1="146.0" x2="744" y2="146.0"/>
+<text class="tick" x="56" y="150.0" text-anchor="end">504</text>
+<line class="grid" x1="64" y1="95.0" x2="744" y2="95.0"/>
+<text class="tick" x="56" y="99.0" text-anchor="end">756</text>
+<line class="grid" x1="64" y1="44.0" x2="744" y2="44.0"/>
+<text class="tick" x="56" y="48.0" text-anchor="end">1008</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" stroke-linejoin="round" points="64.0,237.3 88.3,237.5 112.6,236.0 136.9,232.6 161.1,229.2 185.4,225.9 209.7,222.3 234.0,218.5 258.3,215.0 282.6,211.2 306.9,208.0 331.1,204.7 355.4,201.1 379.7,196.9 404.0,194.0 428.3,190.3 452.6,187.0 476.9,182.8 501.1,180.0 525.4,175.8 549.7,172.0 574.0,169.6 598.3,166.0 622.6,161.5 646.9,158.1 671.1,155.6 695.4,151.9 719.7,162.4 744.0,158.1"/>
+<rect x="64" y="277" width="10" height="10" fill="#1f77b4"/>
+<text class="fg lbl" x="80" y="286">1 replica</text>
+<polyline fill="none" stroke="#2ca02c" stroke-width="2" stroke-linejoin="round" points="64.0,226.5 88.3,226.9 112.6,225.8 136.9,220.9 161.1,213.5 185.4,206.5 209.7,198.6 234.0,192.5 258.3,184.7 282.6,178.3 306.9,170.5 331.1,164.3 355.4,156.7 379.7,149.7 404.0,140.7 428.3,137.6 452.6,128.4 476.9,121.1 501.1,113.2 525.4,107.6 549.7,99.5 574.0,93.9 598.3,85.1 622.6,78.2 646.9,72.3 671.1,65.9 695.4,57.2 719.7,52.3 744.0,44.0"/>
+<rect x="234" y="277" width="10" height="10" fill="#2ca02c"/>
+<text class="fg lbl" x="250" y="286">3 replicas</text>
+<text class="fg lbl" x="64" y="268">seconds into the run</text>
+<text class="fg lbl" x="14" y="146" transform="rotate(-90 14 146)" text-anchor="middle">requests/s</text>
+</svg>

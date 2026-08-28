@@ -1,0 +1,20 @@
+{
+  "timestamp": "2026-08-22T22:01:50+02:00",
+  "hostname": "system76-pc",
+  "kernel": "6.8.0-136-generic",
+  "cpu_model": "12th Gen Intel(R) Core(TM) i7-12700H",
+  "nproc": 20,
+  "governor": "powersave",
+  "energy_performance_preference": "performance",
+  "power_profile": "performance",
+  "no_turbo": 0,
+  "min_perf_pct": 10,
+  "max_perf_pct": 100,
+  "rapl_pl1_watts": 45.0,
+  "rapl_pl2_watts": 115.0,
+  "package_throttle_count": 97682,
+  "core_throttle_count": 198474,
+  "k6_cpuset": "12-19",
+  "ac_online": 1,
+  "loadavg": 0.44
+}

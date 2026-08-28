@@ -9,7 +9,9 @@
 #   A   cache off, 1 replica   the uncached ceiling, and a check on the "~500 qps uncached"
 #                              figure in the capacity model
 #   B   cache on,  1 replica   per-replica capacity and the >= 90% hit ratio
-#   C   cache on,  3 replicas  does throughput scale, or is there a shared-state ceiling
+#   C   cache on,  3 replicas  does throughput scale, or is there a shared-state ceiling. This run
+#                              overrides the published scenario shape: a higher steady rate and a
+#                              longer ramp, because three replicas do not bend where one does.
 #   B2  cache on,  1 replica   a repeat of B. The spread between B and B2 is the noise floor,
 #                              and no optimization counts as a win unless it beats that spread.
 #
@@ -34,6 +36,13 @@ SETTLE_BETWEEN_RUNS="${SETTLE_BETWEEN_RUNS:-60}"
 WARM_DURATION="${WARM_DURATION:-30s}"
 WARM_RATE="${WARM_RATE:-50}"
 SEED_ARTICLES="${SEED_ARTICLES:-10000}"
+# Empty means "whatever slo.json says". The scale-out run needs more than that: three replicas do
+# not bend where one does, so a ramp that tops out at the single-replica knee finds nothing, and a
+# steady rate below 500 rps cannot test the sustained-throughput target at all.
+SCALED_STEADY_RATE="${SCALED_STEADY_RATE:-500}"
+SCALED_RAMP_START_RPS="${SCALED_RAMP_START_RPS:-100}"
+SCALED_RAMP_STEP_RPS="${SCALED_RAMP_STEP_RPS:-100}"
+SCALED_RAMP_STEPS="${SCALED_RAMP_STEPS:-10}"
 PYTHON="${PYTHON:-.venv/bin/python}"
 export K6_CPUSET="${K6_CPUSET:-12-19}"
 export BASE_URL="${BASE_URL:-http://nginx:80}"
@@ -127,8 +136,17 @@ PY
 }
 
 one_run() {
-  # $1 label, $2 replicas, $3 cache enabled
+  # $1 label, $2 replicas, $3 cache enabled, rest: extra environment for the ramp and the steady
+  # run as NAME=VALUE. A run that overrides the published shape records the override here.
   local label="$1" replicas="$2" cache="$3"
+  shift 3
+  local ramp_env=() steady_env=() pair
+  for pair in "$@"; do
+    case "$pair" in
+      RATE=*) steady_env+=("$pair") ;;
+      *) ramp_env+=("$pair") ;;
+    esac
+  done
   local run_id="${MATRIX_ID}-${label}"
 
   say "run ${label}: replicas=${replicas} cache=${cache} (run id ${run_id})"
@@ -146,10 +164,10 @@ one_run() {
   say "run ${label}: warming (results discarded)"
   k6_run scenarios/steady.js "${run_id}-warmup" "RATE=$WARM_RATE" "DURATION=$WARM_DURATION"
 
-  say "run ${label}: ramp"
-  k6_run scenarios/ramp.js "$run_id"
-  say "run ${label}: steady"
-  k6_run scenarios/steady.js "$run_id"
+  say "run ${label}: ramp ${ramp_env[*]:-(published shape)}"
+  k6_run scenarios/ramp.js "$run_id" ${ramp_env[@]+"${ramp_env[@]}"}
+  say "run ${label}: steady ${steady_env[*]:-(published rate)}"
+  k6_run scenarios/steady.js "$run_id" ${steady_env[@]+"${steady_env[@]}"}
   say "run ${label}: spike"
   k6_run scenarios/spike.js "$run_id"
 
@@ -178,7 +196,13 @@ main() {
     case "$label" in
       A) one_run A 1 false ;;
       B) one_run B 1 true ;;
-      C) one_run C 3 true ;;
+      C)
+        one_run C 3 true \
+          "RATE=$SCALED_STEADY_RATE" \
+          "START_RPS=$SCALED_RAMP_START_RPS" \
+          "STEP_RPS=$SCALED_RAMP_STEP_RPS" \
+          "STEPS=$SCALED_RAMP_STEPS"
+        ;;
       B2) one_run B2 1 true ;;
       *)
         echo "unknown run label ${label}" >&2

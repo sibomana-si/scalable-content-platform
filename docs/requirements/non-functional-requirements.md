@@ -1,6 +1,6 @@
 # Non-Functional Requirements (NFR) / SLO
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-06-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
 
 These are the *measurable* claims the system must back up. Pair with [observability/slo.md](../observability/slo.md).
 
@@ -9,15 +9,27 @@ These are the *measurable* claims the system must back up. Pair with [observabil
 ## Performance
 | Metric | Target | Measured under | Status |
 |---|---|---|---|
-| Read P50 latency | < 50 ms | _pending load test_ | 🟥 |
-| Read P95 latency | < 200 ms | _pending load test_ | 🟥 |
-| Read P99 latency | < 450 ms | _pending load test_ | 🟥 |
-| Write P95 latency | < 500 ms | _pending load test_ | 🟥 |
-| Throughput (sustained) | ≥ 500 req/s | _pending load test_ | 🟥 |
+| Read P50 latency | < 50 ms | **5.7 ms** at 525 req/s, 3 replicas, one host | ✅ |
+| Read P95 latency | < 200 ms | **10.9 ms** at 525 req/s, 3 replicas, one host | ✅ |
+| Read P99 latency | < 450 ms | **22.3 ms** at 525 req/s, 3 replicas, one host | ✅ |
+| Write P95 latency | < 500 ms | **26.2 ms** at 525 req/s, 3 replicas, one host | ✅ |
+| Throughput (sustained) | ≥ 500 req/s | **525 req/s** for 5 min, 3 replicas, 0 errors | ✅ |
 
 > **P99 matters alongside P95:** P95 can look healthy while the tail (P99) hides timeouts/GC/lock contention. Track both. Targets follow the conventional API profile (≈P50 45 ms / P95 180 ms / P99 450 ms); read P95 < 200 ms is the committed read-path target.
 >
-> **Throughput is a stated budget, not an industry constant** — it is workload-specific. Refine ≥ 500 req/s to the actual target load profile during M6.
+> **Throughput is a stated budget, not an industry constant** — it is workload-specific. M6 kept the
+> figure and now backs it: three replicas held 525 req/s for five minutes with zero errors, and
+> the measured per-replica knee is about 450 req/s, so the budget needs two replicas plus one of
+> headroom. Raising the budget is a capacity decision, not a measurement — the knee moves with
+> replica count, and this host has spare room only up to about 900 req/s.
+>
+> **Measured on 2026-08-22, commit `3ee0bc8`** — read the numbers with the environment they came
+> from. Full method, machine state, and caveats in
+> [load-test-report.md](../performance/load-test-report.md); bottlenecks in
+> [bottleneck-analysis.md](../performance/bottleneck-analysis.md). One laptop ran the service and
+> the load generator, so the absolute rates measure this host. The measured noise floor at this
+> rate is 4.4% on read P95, so treat a change under about 7% as drift. The read rows take the list
+> read, the slower of the two read operations.
 
 ## Availability & Reliability
 | Metric | Target |
@@ -31,8 +43,8 @@ These are the *measurable* claims the system must back up. Pair with [observabil
 ## Scalability & Efficiency
 | Metric / expectation | Target |
 |---|---|
-| Cache hit ratio (hot reads) | **≥ 90%** (read-heavy production band is 85–95%; this is the lever behind the read-P95 target) |
-| Horizontal scaling | Stateless API scales out linearly with replicas (no sticky sessions); throughput grows with added instances |
+| Cache hit ratio (hot reads) | **≥ 90%** under a hot set tighter than 80/20 — measured **89.4%** on articles under the 80/20 profile of M6, and 73.5% blended across articles and list pages ([report](../performance/load-test-report.md)). The read-heavy production band is 85–95%; the achievable ratio is a function of the access skew, so state the skew with the number |
+| Horizontal scaling | Stateless API scales out with replicas (no sticky sessions); throughput grows with added instances. Measured at M6: one replica bends near 450 req/s and three near 900 req/s, so the growth is real but **sub-linear on a shared host**. A multi-host run must separate service cost from host contention |
 | Connection pooling | Bounded per-instance MySQL/Redis pools sized so total connections stay within server limits as replicas scale |
 
 > **Scope note — process vs. runtime NFRs.** The performance numbers above are *runtime* claims validated by load testing (M6). Everything **below** is a *process / design* requirement that is in force from day one and verifiable without load testing (CI gates, code review, scans, config, backups).

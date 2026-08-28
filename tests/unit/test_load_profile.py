@@ -185,3 +185,53 @@ def test_the_selftest_runs_without_infrastructure() -> None:
 
     assert "lib/workload.js" in source
     assert "lib/api.js" not in source
+
+
+# --- the scenario shapes agree with the plan --------------------------------------------------
+
+
+def plan_shape(scenario: str) -> str:
+    """The Shape cell for one row of the workload-profile table in the plan."""
+
+    for line in PLAN.read_text().splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) >= 4 and cells[1] == f"`{scenario}.js`":
+            return cells[3]
+    raise AssertionError(f"the plan has no workload row for {scenario}.js")
+
+
+def numbers(text: str) -> list[float]:
+    return [float(match) for match in re.findall(r"[\d.]+", text.replace(",", ""))]
+
+
+def test_the_steady_shape_matches_the_plan() -> None:
+    """The rate the pass/fail run offers is a published figure, not a leftover default.
+
+    ``steady.js`` sets the exit code for M6. If its rate drifts from the plan, the run reports a
+    pass at a load nobody agreed to.
+    """
+    rate, minutes = numbers(plan_shape("steady"))
+    steady = slo()["scenarios"]["steady"]
+
+    assert steady["rate_rps"] == rate
+    assert steady["duration"] == f"{int(minutes)}m"
+
+
+def test_the_ramp_shape_matches_the_plan() -> None:
+    start, top, steps, seconds = numbers(plan_shape("ramp"))
+    ramp = slo()["scenarios"]["ramp"]
+
+    assert ramp["start_rps"] == start
+    assert ramp["steps"] == steps
+    assert ramp["step_duration"] == f"{int(seconds)}s"
+    # The top of the ramp is the last step, not one step beyond it.
+    assert ramp["start_rps"] + (ramp["steps"] - 1) * ramp["step_rps"] == top
+
+
+def test_the_spike_shape_matches_the_plan() -> None:
+    base, peak, seconds, back = numbers(plan_shape("spike"))
+    spike = slo()["scenarios"]["spike"]
+
+    assert spike["base_rps"] == base == back
+    assert spike["peak_rps"] == peak
+    assert spike["spike_duration"] == f"{int(seconds)}s"

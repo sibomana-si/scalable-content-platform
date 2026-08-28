@@ -1,0 +1,23 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 300" width="100%" role="img" aria-label="Read p95 through the spike: 50 rps, jump to 500, back to 50">
+<style>.bg{fill:#ffffff}.fg{fill:#1a1a1a}.grid{stroke:#d8d8d8}.tick{fill:#5a5a5a;font-size:11px}.ttl{font-size:14px;font-weight:600}.lbl{font-size:11px}text{font-family:-apple-system,Segoe UI,Roboto,sans-serif}@media (prefers-color-scheme: dark){.bg{fill:#161616}.fg{fill:#ededed}.grid{stroke:#3a3a3a}.tick{fill:#a8a8a8}}</style>
+<rect class="bg" width="760" height="300"/>
+<text class="fg ttl" x="64" y="24">Read p95 through the spike: 50 rps, jump to 500, back to 50</text>
+<line class="grid" x1="64" y1="248.0" x2="744" y2="248.0"/>
+<text class="tick" x="56" y="252.0" text-anchor="end">0.00</text>
+<line class="grid" x1="64" y1="197.0" x2="744" y2="197.0"/>
+<text class="tick" x="56" y="201.0" text-anchor="end">20.5</text>
+<line class="grid" x1="64" y1="146.0" x2="744" y2="146.0"/>
+<text class="tick" x="56" y="150.0" text-anchor="end">41.1</text>
+<line class="grid" x1="64" y1="95.0" x2="744" y2="95.0"/>
+<text class="tick" x="56" y="99.0" text-anchor="end">61.6</text>
+<line class="grid" x1="64" y1="44.0" x2="744" y2="44.0"/>
+<text class="tick" x="56" y="48.0" text-anchor="end">82.1</text>
+<polyline fill="none" stroke="#1f77b4" stroke-width="2" stroke-linejoin="round" points="64.0,236.0 116.3,236.0 168.6,236.0 220.9,69.5 273.2,64.6 325.5,64.6 377.8,44.0 430.2,236.1 482.5,236.1 534.8,236.0 587.1,236.1 639.4,236.1 691.7,236.0 744.0,236.0"/>
+<rect x="64" y="277" width="10" height="10" fill="#1f77b4"/>
+<text class="fg lbl" x="80" y="286">1 replica</text>
+<polyline fill="none" stroke="#2ca02c" stroke-width="2" stroke-linejoin="round" points="64.0,236.0 116.3,236.1 168.6,235.7 220.9,230.5 273.2,229.2 325.5,228.4 377.8,229.4 430.2,235.7 482.5,236.0 534.8,236.0 587.1,235.9 639.4,235.9 691.7,236.0 744.0,236.1"/>
+<rect x="234" y="277" width="10" height="10" fill="#2ca02c"/>
+<text class="fg lbl" x="250" y="286">3 replicas</text>
+<text class="fg lbl" x="64" y="268">seconds into the run</text>
+<text class="fg lbl" x="14" y="146" transform="rotate(-90 14 146)" text-anchor="middle">milliseconds</text>
+</svg>
