@@ -28,6 +28,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   80/20 hot set the achievable article ratio is 89.4%, and the blended ratio is 73.5% because list
   pages hit under 10% of the time. Nothing about the workload was changed to reach 90%; the
   requirement was written without the assumption it rests on (finding F4).
+- The load-test runbook passed a cold-start rehearsal from a stopped stack, which found four
+  defects: the port check said "no output" where `ss -ltn` always prints a header row, section 1
+  said 30 minutes for a matrix that section 2 measured at 68.5, the results step still told the
+  reader to take Grafana screenshots that `scripts/plot_load_results.py` now generates, and the
+  cache pass bands covered the 200 rps matrix only, so a correct run at 350 rps would have failed
+  check 2. Section 7 gains the run-and-repeat drift failure the matrix actually met.
 - [slo.md](observability/slo.md) records the measured values and the gap they exposed: the
   availability SLI is built on server-side counters, and past the knee the client loses requests at
   connection level that the server never accepts and never counts (finding F5).
