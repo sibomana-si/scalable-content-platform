@@ -166,6 +166,11 @@ Everything lands in `docs/performance/results/`, named for the run id:
 Commit the summary files and both metadata snapshots for every run the report cites. Discard the
 warm-up summaries, which carry `-warmup` in the run id and measure a cold cache on purpose.
 
+Every run prints one headline line, which carries `miss=` beside `failed=` and `dropped=`. The
+number is the `read_detail_miss` rate: the share of detail reads that answered 404. A 404 costs
+nothing and caches nothing, so a run against ids the seeder never wrote reports zero errors and a
+plausible latency series. Read `miss=` before you read the percentiles.
+
 Generate the report charts with the stack still up:
 
 ```bash
@@ -225,6 +230,7 @@ same id inside one 300-second TTL window. It measures 82% at 200 rps and 88% to 
 | 5 | k6 `http_reqs` against the Prometheus request count, `steady.js` | within 0.1% | Requests die at nginx and never reach the app. Measured 0.00% to 0.01% across the four runs. |
 | 6 | Package throttle delta, run against repeat | within 10% | The machine drifted between a run and its repeat, so the pair does not set a noise floor. Measured 3.3% for the 200 rps pair, and **36.7% for the 350 rps pair, which failed**. See section 7. |
 | 7 | `powerprofilesctl get` after the last run | `performance` | `power-profiles-daemon` reverted mid-matrix, silently. |
+| 8 | k6 `read_detail_miss` on `steady.js` | below 1% | The generator read ids the seeder never wrote. The reads never touched a row or the cache, so the latency series is fiction. `steady.js` fails the run on this threshold and sets the exit code. |
 
 Check 5 holds for `steady.js` only. Under `ramp.js` and `spike.js` the two counts disagree by
 design: the ramp loses 1% to 3% of requests at connection level past the knee, and the spike
@@ -235,6 +241,20 @@ measurement in the first place.
 Check 6 replaced an absolute cap of 1,000 throttle events, which failed all four runs of the
 first matrix and carried no information. See the [bottleneck
 analysis](bottleneck-analysis.md) for the measurement that motivated the change.
+
+Check 8 has a guard in front of it. `setup()` draws 20 ids with the production picker and reads
+each one before the run starts. More than one 404 stops the run with a message that names the
+drawn range and the `ARTICLE_ID_BASE` it came from:
+
+```text
+the picker drew ids 1-10000 but 20 of 20 are missing (ARTICLE_ID_BASE=1); reseed, or export
+ARTICLE_ID_MIN from `seed_load_dataset.py --emit-range`
+```
+
+Read the base in that message. A value of `1` means the `ARTICLE_ID_MIN` export is missing, and
+any other wrong value means it is stale. Reseed, or export the `id_min` the seeder reported, then
+run again. All three scenarios share `setup()`, so the guard covers `ramp.js` and `spike.js`,
+which carry no thresholds.
 
 ## Teardown and restoring the machine
 
