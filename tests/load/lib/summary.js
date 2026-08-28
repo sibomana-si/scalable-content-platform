@@ -27,6 +27,7 @@ export function headline(scenario, data) {
     `p99=${value(metrics, 'http_req_duration', 'p(99)')}ms`,
     `failed=${value(metrics, 'http_req_failed', 'rate')}`,
     `dropped=${value(metrics, 'dropped_iterations', 'count') || 0}`,
+    `miss=${value(metrics, 'read_detail_miss', 'rate') || 0}`,
   ];
   return parts.join(' · ');
 }

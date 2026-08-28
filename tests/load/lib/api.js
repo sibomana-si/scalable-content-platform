@@ -6,7 +6,7 @@
 
 import http from 'k6/http';
 import { check } from 'k6';
-import { Trend } from 'k6/metrics';
+import { Rate, Trend } from 'k6/metrics';
 import { buildBody, buildTitle } from './workload.js';
 
 export const BASE_URL = (__ENV.BASE_URL || 'http://nginx:80').replace(/\/$/, '');
@@ -18,6 +18,12 @@ export const trends = {
   write_create: new Trend('op_write_create', true),
   write_update: new Trend('op_write_update', true),
 };
+
+// A detail read that answers 404 is a miss against the seeded block, not an error, so no check
+// and no `http_req_failed` entry records it. Count it here instead. A picker aimed at ids the
+// seeder never wrote returns a full run of 404s that reads as a clean pass, which is how the
+// 2026-08-24 run reported plausible latency for reads that never touched a row or the cache.
+export const missRate = new Rate('read_detail_miss');
 
 function record(op, response) {
   trends[op].add(response.timings.duration);
@@ -60,7 +66,14 @@ export function readDetail(id) {
   );
   // 404 is a correct answer for an id the seeder never wrote, so it is not an error here.
   check(response, { 'detail read answered': (r) => r.status === 200 || r.status === 404 });
+  missRate.add(response.status === 404);
   return response;
+}
+
+// The setup() probe reads one id before the run begins. It carries its own tag, records no
+// Trend, and feeds no `read_detail_miss`, so the reported series covers the measured run only.
+export function probeArticle(id) {
+  return http.get(`${BASE_URL}/v1/articles/${id}`, { tags: { op: 'setup_probe' } });
 }
 
 export function readList(walk, workload) {

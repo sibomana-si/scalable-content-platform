@@ -187,6 +187,31 @@ def test_the_selftest_runs_without_infrastructure() -> None:
     assert "lib/api.js" not in source
 
 
+# --- the silent-miss guard --------------------------------------------------------------------
+
+
+def test_a_missing_detail_read_is_counted() -> None:
+    """A 404 is not an error, so nothing else records it.
+
+    The 2026-08-24 run drew ids the seeder never wrote. Every read answered 404, which cost
+    nothing and cached nothing, and the run still reported a clean pass with a plausible latency
+    series. ``read_detail_miss`` is the only number that shows it.
+    """
+
+    source = (LOAD_DIR / "lib" / "api.js").read_text()
+
+    assert "read_detail_miss" in source
+    assert "missRate.add(response.status === 404)" in source
+
+
+def test_the_miss_rate_is_bounded_by_a_threshold() -> None:
+    """A metric nothing fails on is a metric nobody reads."""
+
+    source = (LOAD_DIR / "lib" / "iteration.js").read_text()
+
+    assert re.search(r"read_detail_miss:\s*\['rate<0\.01'\]", source)
+
+
 # --- the scenario shapes agree with the plan --------------------------------------------------
 
 

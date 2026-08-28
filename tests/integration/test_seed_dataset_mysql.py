@@ -11,7 +11,7 @@ from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Article, User
-from scripts.seed_load_dataset import AUTHOR_EMAIL_TEMPLATE, SeedPlan, seed
+from scripts.seed_load_dataset import AUTHOR_EMAIL_TEMPLATE, SeedPlan, range_payload, seed
 
 pytestmark = pytest.mark.integration
 
@@ -94,3 +94,31 @@ async def test_the_skew_survives_the_round_trip(db_session: AsyncSession) -> Non
     per_author = sorted((count for _, count in counts), reverse=True)
     assert len(per_author) == 10
     assert sum(per_author[:2]) / sum(per_author) > 0.6
+
+
+async def test_the_reported_id_range_matches_the_rows_in_mysql(db_session: AsyncSession) -> None:
+    """The load generator draws ids from this range, so a wrong range reads an empty table.
+
+    `AUTO_INCREMENT` does not restart at 1 after a delete, so the seeded block starts wherever
+    the counter stood. The generator takes `id_min` from `--emit-range`. If that number does not
+    match the rows, every detail read answers 404 and the run measures nothing.
+    """
+
+    result = await seed(a_plan())
+
+    authors = (
+        (await db_session.execute(select(User.id).where(User.email.like("%@loadtest.example"))))
+        .scalars()
+        .all()
+    )
+    observed = (
+        await db_session.execute(
+            select(func.min(Article.id), func.max(Article.id)).where(Article.author_id.in_(authors))
+        )
+    ).one()
+
+    assert range_payload(result) == {
+        "id_min": observed[0],
+        "id_max": observed[1],
+        "articles": 50,
+    }
