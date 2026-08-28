@@ -14,8 +14,8 @@ path, a compose profile, a k6 argument, or an environment variable stops resolvi
 
 ## Before you start
 
-You need a Linux host with Docker, about 30 minutes of wall-clock time for a full matrix, and
-2 GB of free disk for the containers and results.
+You need a Linux host with Docker, a little over an hour of wall-clock time for a full matrix,
+and 2 GB of free disk for the containers and results. Section 2 gives the measured cost.
 
 Check all five prerequisites in under a minute:
 
@@ -35,7 +35,7 @@ What each answer must say:
 | `powerprofilesctl get` | `balanced`, `performance`, or `power-saver` | `power-profiles-daemon` is not running. Install it, or the run cannot hold a power policy. |
 | `/sys/class/power_supply/AC/online` | `1` | Plug the laptop in. On battery the numbers mean nothing, and `perf_env.sh lock` refuses to run. |
 | `df -h` | 2 GB or more available | Free space. Prometheus and the container images need it. |
-| `ss -ltn` | no output | Another process holds a port the stack needs. Stop it. |
+| `ss -ltn` | the column header only, with no rows under it | Another process holds a port the stack needs. Stop it. |
 
 Then create the Python environment and confirm the load generator starts:
 
@@ -166,10 +166,18 @@ Everything lands in `docs/performance/results/`, named for the run id:
 Commit the summary files and both metadata snapshots for every run the report cites. Discard the
 warm-up summaries, which carry `-warmup` in the run id and measure a cold cache on purpose.
 
-Take the Grafana screenshots before you stop the stack, because Prometheus keeps its data in a
-named volume but the run window is easier to find while it is still recent. Open Grafana at
-`http://localhost:3000`, set the time range to the run window, and capture the API Overview,
-Cache, and Database dashboards into `docs/performance/images/`.
+Generate the report charts with the stack still up:
+
+```bash
+.venv/bin/python scripts/plot_load_results.py
+```
+
+It writes four SVGs into `docs/performance/images/` from Prometheus range queries over the run
+windows. Prometheus keeps its data in a named volume, so you can run it later, but the run window
+is easier to find while it is recent. The charts replace the Grafana screenshots the plan first
+called for: a screenshot cannot be regenerated or checked against the data, and a script can. Open
+Grafana at `http://localhost:3000` to read a run window by eye, but do not paste a picture of it
+into the report.
 
 ## Verifying the run is citable
 
@@ -204,14 +212,18 @@ Judge the cache by entity, never blended. Run B measured 82% on `article` agains
 and the blend of 68% describes neither. A blended figure inside a pass band can hide a list cache
 that does nothing.
 
+The article ratio also rises with the offered rate, because a higher rate puts more reads of the
+same id inside one 300-second TTL window. It measures 82% at 200 rps and 88% to 89% at 350 to
+500 rps. Compare a ratio only against a run at the same rate.
+
 | # | Check | Pass band | A failure means |
 |---|---|---|---|
 | 1 | Targets up in the `content-platform-replicas` pool | equal to `--scale app=N` | A replica is unscraped, so the server-side metrics cover only part of the fleet. |
-| 2 | `article` cache hit ratio during run B | 78% to 88% | The hot-set picker is wrong, not the cache. Measured 82.1%, 82.2% and 82.3% across B, C and B2. |
-| 3 | `list` cache hit ratio during run B | 5% to 15% | The list generation counter changed behavior. Measured 9.6%, 9.5% and 9.4%. The low value is expected, not a fault. |
+| 2 | `article` cache hit ratio during run B | 78% to 92% | The hot-set picker is wrong, not the cache. Measured 82.1% to 82.3% at 200 rps, and 87.6% to 89.4% at 350 to 500 rps. |
+| 3 | `list` cache hit ratio during run B | 5% to 15% | The list generation counter changed behavior. Measured 9.4% to 9.6% at 200 rps and 8.2% to 8.9% at 350 to 500 rps. The low value is expected, not a fault. |
 | 4 | k6 `dropped_iterations` on `steady.js` | zero | The generator could not hold the offered rate. The run measured the laptop. Applies to `steady.js` only: `ramp.js` and `spike.js` run past the knee on purpose, where drops are the result. |
 | 5 | k6 `http_reqs` against the Prometheus request count, `steady.js` | within 0.1% | Requests die at nginx and never reach the app. Measured 0.00% to 0.01% across the four runs. |
-| 6 | Package throttle delta, run against repeat | within 10% | The machine drifted between a run and its repeat, so the pair does not set a noise floor. Measured 3.3% for B against B2. |
+| 6 | Package throttle delta, run against repeat | within 10% | The machine drifted between a run and its repeat, so the pair does not set a noise floor. Measured 3.3% for the 200 rps pair, and **36.7% for the 350 rps pair, which failed**. See section 7. |
 | 7 | `powerprofilesctl get` after the last run | `performance` | `power-profiles-daemon` reverted mid-matrix, silently. |
 
 Check 5 holds for `steady.js` only. Under `ramp.js` and `spike.js` the two counts disagree by
@@ -328,9 +340,28 @@ docker compose up -d
 .venv/bin/python scripts/seed_load_dataset.py --articles 10000
 ```
 
+### The run and its repeat drifted
+
+**Symptom.** Both runs of a pair are individually citable, but their package throttle deltas
+differ by more than 10%, so check 6 fails.
+
+**Cause.** The chassis was in a different thermal state for the two runs. The settle period holds
+the gap between runs constant; it does not hold the ambient temperature or the machine's history
+before the matrix started.
+
+**Fix.** Do not discard the pair, and do not re-run it on the assumption that the second attempt
+is better. Compare the two runs figure by figure first. Steady-state figures below the knee
+survive a large drift, because the service is not the limit there. Figures taken above the knee do
+not survive it at all. Report the failed check, source every requirement row from the steady run,
+and quote nothing past the knee as a measurement.
+
+```bash
+.venv/bin/python scripts/summarize_load_results.py
+```
+
 ### Failures met during the M6 run
 
-Two of the entries above are not hypothetical. The 2026-08-22 matrix hit both.
+Three of the entries above are not hypothetical. The 2026-08-22 matrices hit all three.
 
 **The matrix stopped in the middle.** k6 crossed `dropped_iterations: ['count==0']` on run B, exited
 99, and `set -euo pipefail` ended the script. The fix in `run_load_matrix.sh` now records a crossed
@@ -340,6 +371,13 @@ threshold and continues, because a crossed threshold is a measurement.
 sat idle. Neither the generator nor the server was the limit: shell commands run during the window
 took CPU from the generator. The re-run with the machine left alone dropped zero. This is the
 reason for the hands-off rule above.
+
+**The run and its repeat drifted.** The 350 rps pair failed check 6 at 36.7%, against 3.3% for the
+200 rps pair run earlier the same day. The steady figures the requirement rows rest on agreed
+within 4.4% client-side and 1.8% server-side. The ramp and spike figures, taken past the knee,
+disagreed by up to 99%. The failure was reported in the
+[load test report](load-test-report.md) rather than resolved by a third run, and it is the reason
+that report quotes no number above saturation.
 
 ## Parameter reference
 
