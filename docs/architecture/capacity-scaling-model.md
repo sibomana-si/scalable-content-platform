@@ -1,6 +1,6 @@
 # Capacity & Scaling Model
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-27
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
 
 Back-of-the-envelope sizing that justifies the scaling claims. These are **planning numbers, not
 commitments** — each is validated (or corrected) by the M6 load test, and this document is updated
@@ -99,11 +99,22 @@ safety net — correct for a pure cache where MySQL is the source of truth and a
 replicas = ceil( peak RPS ÷ per-replica capacity ) + 1 headroom
 ```
 
-Per-replica capacity is **measured, not assumed** — it comes from the M6 single-replica load test
-(🟥 _pending load test (M6)_). For planning: async FastAPI workers serving cache-hit reads are
-typically capable of several hundred RPS per replica, suggesting a **2–4 replica** starting point at
-500 req/s (plus one replica of headroom for rollouts and failure). The number that goes here after
-M6 is the one that counts.
+Per-replica capacity is **measured, not assumed**. M6 measured it: one replica bends at about
+**450 req/s** ([load-test-report](../performance/load-test-report.md)). The arithmetic follows:
+
+```
+replicas = ceil( 500 req/s ÷ 450 req/s ) + 1 headroom = 3
+```
+
+Three replicas is the MVP sizing, and M6 ran it: 525 req/s sustained for five minutes at a read
+P95 of 10.9 ms with zero errors.
+
+Two corrections to the planning prose this paragraph replaced. The old estimate of "several
+hundred RPS per replica" was right, and the resulting 2–4 replica range was right, but for the
+wrong reason — the limit is **CPU inside one uvicorn event loop**, not the database and not the
+cache (finding F1). And scaling is **sub-linear on this host**: three replicas bend near 900 req/s,
+about twice one replica rather than three times. Size with the measured figure, not with a linear
+extrapolation, until a multi-host run separates the service cost from contention on the machine.
 
 ## Scaling Limits & Bottlenecks
 
@@ -156,10 +167,35 @@ Each assumption above is validated at M6 and the measured value recorded here
 
 | Claim to validate | Measured | Status |
 |---|---|---|
-| Per-replica capacity (RPS at P95 < 200 ms) | _pending load test_ | 🟥 |
-| Cache hit ratio ≥ 90% under the target profile | _pending load test_ | 🟥 |
-| MySQL load ≈ 55 qps at target hit ratio | _pending load test_ | 🟥 |
+| Per-replica capacity (RPS at P95 < 200 ms) | **≈ 450 req/s** — the knee sits at 444–475 req/s (run B) and 429–464 req/s (run B2), at a P95 of 20–24 ms | ✅ |
+| Cache hit ratio ≥ 90% under the target profile | **89.4%** on articles, **73.5%** blended, under an 80/20 hot set | 🟨 |
+| MySQL load ≈ 55 qps at target hit ratio | **248 qps** normalized to 500 req/s (0.496 queries per request), against 55 predicted | 🟥 |
 | Fall-through survival: MySQL at ~500 qps with Redis disabled | _pending fault-injection test (M7)_ | 🟥 |
 | Correctness under scale-out (no shared-state ceiling) | `tests/integration/test_horizontal_scaling.py`, `tests/integration/test_multi_replica.py` | 🟩 |
-| Throughput scales with added replicas | _pending load test_ | 🟥 |
-| Avg payload size 2–8 KB and Redis memory model | _pending load test_ | 🟥 |
+| Throughput scales with added replicas | **Yes, sub-linearly** — 450 req/s on one replica, 900 req/s on three | 🟨 |
+| Avg payload size 2–8 KB and Redis memory model | **4,912 bytes** mean body, inside the range; Redis holds **2.05 MB** for the whole working set against 120 MB modeled worst case | ✅ |
+
+Three of these need a sentence, because the number alone misleads.
+
+**The MySQL estimate was wrong, and the cause is the list cache.** The model divided by a 90%
+blended hit ratio. The measured blended ratio is 72.3%, because list pages hit under 10% of the
+time — generation-counter invalidation busts every unfiltered page on every write (ADR-0010,
+finding F3). At 0.496 queries per request the corrected form is:
+
+```
+DB qps = offered rps × queries per request
+       = 500 × 0.496 ≈ 248 qps
+```
+
+MySQL absorbed it without strain — query P95 held at 1.9 ms throughout — so the design conclusion
+stands even though the arithmetic did not. Use 0.5 queries per request as the planning figure and
+re-measure it whenever the invalidation strategy changes.
+
+**The hit ratio target is a function of the access skew.** An 80/20 hot set caps the achievable
+article ratio near 80% plus the repeats in the cold tail, and 89.4% is what that workload can
+give. The target is not missed by the system; it was stated without the skew it depends on
+(finding F4).
+
+**Scaling is sub-linear on one host.** Three replicas returned twice the capacity, not three
+times, on a laptop that also ran MySQL, Redis, nginx, Prometheus, Grafana, and the generator. The
+next measurement is a run with the generator on a separate machine.

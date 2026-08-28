@@ -1,6 +1,6 @@
 # Bottleneck Analysis
 
-> **Status:** ✅ Complete · **Owner:** Simon Sibomana · **Last updated:** 2026-08-27
+> **Status:** ✅ Complete · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
 
 What the load test found, ranked by measured cost. This document is the input to the optimization
 work: a slow path that is not written down here does not get optimized.
@@ -247,7 +247,13 @@ requirement.
 **Proposed fix.** State the target as a function of the access skew, and record 82% as the
 measured value for an 80/20 hot set. Do not move the workload to reach the number.
 
-**Resolution.** 🟨 Filled by the reporting work.
+**Resolution.** ✅ Done in the reporting work. The NFR row now reads "≥ 90% under a hot set
+tighter than 80/20", and records 89.4% on articles and 73.5% blended as the measured values for
+the 80/20 profile. The workload was not changed to reach the number.
+
+The two figures in this finding differ because the ratio rises with the offered rate: at 200 rps
+it measures 82%, at 350–500 rps it measures 88–89%. A higher rate puts more reads of the same id
+inside one 300-second TTL window. Quote the ratio with the rate it was measured at.
 
 ### F5 — Past the knee, requests are lost at connection level, not rejected by the application
 

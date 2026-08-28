@@ -152,6 +152,33 @@ def test_every_environment_variable_a_command_sets_is_documented() -> None:
     assert not undocumented, f"used but not in the parameter reference: {sorted(undocumented)}"
 
 
+def test_every_knob_the_matrix_script_reads_is_documented() -> None:
+    """The forward test only sees variables a runbook command sets.
+
+    A knob added to `run_load_matrix.sh` and never typed into an example is invisible to it, and
+    invisible to the reader for the same reason. This reads the script instead of the document.
+    """
+
+    script = (REPO_ROOT / "scripts" / "run_load_matrix.sh").read_text()
+    # `NAME="${NAME:-default}"` is how the script declares every knob it accepts.
+    declared = set(re.findall(r'^([A-Z][A-Z0-9_]{2,})="\$\{\1:-', script, re.MULTILINE))
+    declared -= AMBIENT_VARIABLES
+
+    undocumented = declared - documented_parameters()
+    assert not undocumented, f"read by the matrix but not documented: {sorted(undocumented)}"
+
+
+def test_every_shape_override_the_scenarios_accept_is_documented() -> None:
+    """A scenario knob nobody documents is a shape that changes without a record."""
+
+    used = set()
+    for script in sorted((LOAD_DIR / "scenarios").glob("*.js")):
+        used.update(re.findall(r"__ENV\.([A-Z][A-Z0-9_]{2,})", script.read_text()))
+
+    undocumented = used - documented_parameters()
+    assert not undocumented, f"read by a scenario but not documented: {sorted(undocumented)}"
+
+
 def test_the_parameter_reference_documents_nothing_that_does_not_exist() -> None:
     """The reverse drift: a documented knob no script reads."""
 

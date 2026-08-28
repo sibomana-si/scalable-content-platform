@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- **The M6 load test is reported, and all five performance targets pass.** Three replicas held
+  **525 req/s for five minutes** at a read P95 of **10.9 ms**, a write P95 of **26.2 ms**, and zero
+  errors, so the five 🟥 rows in
+  [non-functional-requirements.md](requirements/non-functional-requirements.md) are now ✅ with
+  measured values and the environment they came from. Full method, machine state, and caveats in
+  [load-test-report.md](performance/load-test-report.md).
+- The steady scenario now runs at **350 rps instead of 200**, about 80% of the measured
+  single-replica knee. The old figure was chosen before anything had been measured, and it tested
+  the service at under half its capacity. `tests/unit/test_load_profile.py` fails if the rate in
+  `tests/load/lib/slo.json` and the shape in the plan separate again.
+- The capacity model is corrected where the measurement disagreed with it. Per-replica capacity is
+  **450 req/s**, not "several hundred". Scaling is **sub-linear on a shared host** — three replicas
+  bend near 900 req/s, twice one replica rather than three times. And the MySQL estimate was wrong
+  by 4.5 times: the model assumed a 90% blended hit ratio, the measured ratio is 72.3%, and the
+  corrected planning figure is **0.5 queries per request**, or about 248 qps at 500 req/s. MySQL
+  absorbed it at a query P95 of 1.9 ms, so the design conclusion stands even though the arithmetic
+  did not.
+- The cache hit ratio target is now stated **against the access skew** it depends on. Under an
+  80/20 hot set the achievable article ratio is 89.4%, and the blended ratio is 73.5% because list
+  pages hit under 10% of the time. Nothing about the workload was changed to reach 90%; the
+  requirement was written without the assumption it rests on (finding F4).
+- [slo.md](observability/slo.md) records the measured values and the gap they exposed: the
+  availability SLI is built on server-side counters, and past the knee the client loses requests at
+  connection level that the server never accepts and never counts (finding F5).
 - **Breaking, inside `/v1`:** `GET /v1/articles` items no longer carry `body`. A page of 20 items
   fell from **101,367 bytes to 2,935**, and a cached page in Redis from 23.5 KB to 3.67 KB. Read
   one article to get its text. `updated_at` still travels with each item, so a list page is still
@@ -32,6 +56,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   guarantee, not a defect.
 
 ### Added
+- `docs/performance/load-test-report.md` is written: test conditions, the machine state held across
+  every run, the results tables for runs A, B, C and the repeat, the knee, four charts, the
+  bottleneck list with resolutions, and the conclusion against the NFR. It states the two limits in
+  the summary rather than in a footnote — one laptop ran the service and the generator, and the
+  measured **noise floor is 4.4% on read P95**, so a change under about 7% is drift. It also
+  reports a **failed** run-and-repeat drift check (36.7% against a 10% limit) rather than hiding it,
+  and shows why the steady figures survive it while nothing past the knee does.
+- `scripts/plot_load_results.py` generates the report charts as self-contained SVGs from the same
+  Prometheus range queries the analysis reads. The plan asked for Grafana screenshots; a screenshot
+  cannot be regenerated or checked, and a script can. Covered by
+  `tests/unit/test_plot_load_results.py`.
+- `tests/unit/test_load_report.py` makes the report executable, on the `test_capacity_model.py`
+  precedent: no template placeholder survives, no results cell is empty, every performance row
+  carries a measurement and a verdict, every image and results file the report names is on disk,
+  and the summary states both caveats.
+- `ramp.js` accepts `START_RPS`, `STEP_RPS` and `STEPS`, and `scripts/run_load_matrix.sh` accepts
+  the four `SCALED_*` knobs, so the scale-out run can climb past where one replica bends. Two new
+  tests read the scripts rather than the runbook, so a knob cannot ship undocumented.
 - `docs/performance/bottleneck-analysis.md` records what the four-run matrix of 2026-08-22
   measured, ranked by cost. The headline is that **one app replica saturates near 430 rps and the
   cache does not raise that ceiling**: the cached knee (434 rps) and the uncached knee (429 rps)

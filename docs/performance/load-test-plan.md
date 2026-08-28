@@ -1,6 +1,6 @@
 # Load Test Plan
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
 
 What M6 measures, on what workload, and under what conditions a number counts.
 
@@ -59,12 +59,23 @@ rate and lets the queue grow, which is what a knee point looks like.
 
 | Scenario | Script | Executor | Shape | Answers |
 |---|---|---|---|---|
-| Steady | `steady.js` | `constant-arrival-rate` | 200 rps for 5 minutes | Does the service hold the NFR targets at the target rate? |
+| Steady | `steady.js` | `constant-arrival-rate` | 350 rps for 5 minutes | Does the service hold the NFR targets at the target rate? |
 | Ramp | `ramp.js` | `ramping-arrival-rate` | 50 rps to 500 rps, 10 steps of 45 seconds | Where is the knee? |
 | Spike | `spike.js` | `ramping-arrival-rate` | 50 rps, jump to 500 for 30 seconds, back to 50 | How far does it degrade, and how fast does it recover? |
 
 `steady.js` carries the SLO thresholds and sets the exit code. `ramp.js` carries none on purpose:
 it climbs past the rate at which the targets hold, so a threshold there would fail by design.
+
+**The steady rate is the operating point, and the operating point is measured.** It started at
+200 rps, a figure chosen before anything had been run. The matrix of 2026-08-22 then found the
+single-replica knee near 430 rps, so 200 rps tested a service at under half its capacity, which
+answers no question a reader has. The rate is now **350 rps, about 80% of the measured knee** —
+the load a service runs at when it is sized with headroom for a failure or a rollout. Re-measure
+the knee and move this number with it.
+
+Two runs override the shape, and say so in their results. The scale-out run offers a higher
+steady rate and a longer ramp, because three replicas do not bend where one does. The `A` run
+keeps whatever the file says, so the cache comparison holds.
 
 Every scenario runs the same request mix: 95% reads and 5% writes. Reads split 80/20 between
 article detail and list pages. Writes are a create, and an update that does a read, then a

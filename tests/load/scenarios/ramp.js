@@ -12,11 +12,17 @@ import { makeHandleSummary } from '../lib/summary.js';
 
 const config = slo.scenarios.ramp;
 
+// The shape is overridable so the scale-out run can climb past where one replica bends.
+// A run that overrides it says so in its results.
+const startRate = Number(__ENV.START_RPS || config.start_rps);
+const stepRate = Number(__ENV.STEP_RPS || config.step_rps);
+const stepCount = Number(__ENV.STEPS || config.steps);
+
 function stages() {
   const built = [];
-  for (let step = 1; step <= config.steps; step += 1) {
+  for (let step = 1; step <= stepCount; step += 1) {
     built.push({
-      target: config.start_rps + (step - 1) * config.step_rps,
+      target: startRate + (step - 1) * stepRate,
       duration: __ENV.STEP_DURATION || config.step_duration,
     });
   }
@@ -27,7 +33,7 @@ export const options = {
   scenarios: {
     ramp: {
       executor: 'ramping-arrival-rate',
-      startRate: config.start_rps,
+      startRate: startRate,
       timeUnit: '1s',
       // Each stage holds a flat rate: `target` equal to the previous target would ramp, and a
       // sloped rate gives no window at which any single number is true.

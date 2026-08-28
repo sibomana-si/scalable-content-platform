@@ -1,6 +1,6 @@
 # Load Test Runbook
 
-> **Status:** ✅ Complete — executed end to end on 2026-08-22 · **Owner:** Simon Sibomana · **Last updated:** 2026-08-25
+> **Status:** ✅ Complete · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
 
 How to repeat the M6 load test on a cold machine, without having been in the room.
 
@@ -351,6 +351,10 @@ Every knob the commands above accept. Defaults are what the scripts use when you
 | `SEED_ARTICLES` | `10000` | Rows the seeder tops the dataset up to. | `run_load_matrix.sh` |
 | `SETTLE_BETWEEN_RUNS` | `60` | Seconds of idle between runs, so each starts from the same thermal state. | `run_load_matrix.sh` |
 | `WARM_RATE` | `50` | Arrival rate of the discarded warm-up. | `run_load_matrix.sh` |
+| `SCALED_STEADY_RATE` | `500` | Arrival rate of the steady run in run C. Three replicas hold the published rate with too much headroom to measure anything. | `run_load_matrix.sh` |
+| `SCALED_RAMP_START_RPS` | `100` | First ramp step in run C. | `run_load_matrix.sh` |
+| `SCALED_RAMP_STEP_RPS` | `100` | Ramp step size in run C. | `run_load_matrix.sh` |
+| `SCALED_RAMP_STEPS` | `10` | Ramp steps in run C, so the climb reaches 1000 rps and passes the three-replica knee. | `run_load_matrix.sh` |
 | `WARM_DURATION` | `30s` | Length of the discarded warm-up. | `run_load_matrix.sh` |
 | `RESULTS_DIR` | `docs/performance/results` | Where summaries and snapshots land. Inside the container it is `/results`. | `run_load_matrix.sh`, `summary.js` |
 | `PYTHON` | `.venv/bin/python` | Interpreter the matrix uses for the seeder and the verdict. | `run_load_matrix.sh` |
@@ -364,6 +368,9 @@ Every knob the commands above accept. Defaults are what the scripts use when you
 | `RATE` | from `slo.json` | Arrival rate of the steady run, in requests per second. | `steady.js` |
 | `DURATION` | from `slo.json` | Length of the steady run. | `steady.js` |
 | `STEP_DURATION` | from `slo.json` | How long the ramp holds each step. | `ramp.js` |
+| `START_RPS` | from `slo.json` | Arrival rate of the first ramp step. | `ramp.js` |
+| `STEP_RPS` | from `slo.json` | How much each ramp step adds. | `ramp.js` |
+| `STEPS` | from `slo.json` | How many ramp steps to climb. Raise it when the run never bends. | `ramp.js` |
 | `PRE_ALLOCATED_VUS` | from `slo.json` | Virtual users started before the run, so the first seconds are not a ramp. | all scenarios |
 | `MAX_VUS` | from `slo.json` | Ceiling on virtual users. Raise it when the generator drops iterations. | all scenarios |
 | `SETTLE_SECONDS` | `3` | Pause after the power profile changes, before the state is read back. | `perf_env.sh` |

@@ -1,6 +1,6 @@
 # SLI / SLO / Error Budget
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-12
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
 
 
 ## Service Level Indicators (SLIs)
@@ -24,13 +24,38 @@ Two implementation details the queries above depend on:
   target sits on a bucket edge; those two edges exist precisely because these are the targets.
 
 ## Service Level Objectives (SLOs)
-| SLO | Target | Window |
-|---|---|---|
-| Read latency | 95% < 200ms (P99 < 450ms) | 30 days rolling |
-| Availability | 99.9% | 30 days rolling |
-| Error rate | < 0.1% 5xx | 30 days rolling |
+| SLO | Target | Window | Measured at M6 |
+|---|---|---|---|
+| Read latency | 95% < 200ms (P99 < 450ms) | 30 days rolling | P95 **10.9 ms**, P99 **22.3 ms** |
+| Availability | 99.9% | 30 days rolling | **100%** over 378,195 requests |
+| Error rate | < 0.1% 5xx | 30 days rolling | **0.000%** — zero 5xx in every scenario |
 
-Targets are the requirements set in [non-functional-requirements.md](../requirements/non-functional-requirements.md); measured values are recorded after load testing (M6).
+Targets are the requirements set in [non-functional-requirements.md](../requirements/non-functional-requirements.md).
+
+### What M6 measured, and what it did not
+
+The Measured column comes from the steady scenario of the 2026-08-22 matrix: three replicas,
+525 req/s, five minutes ([load-test-report](../performance/load-test-report.md)). Read it with
+three limits.
+
+- **A load test is not a rolling window.** These SLOs are 30-day objectives. A five-minute run
+  proves the service can meet them, not that it does. The burn-rate alerts below remain the
+  instrument that answers the SLO.
+- **The latency objective has enormous margin, and the throughput budget has almost none.** Read
+  P95 came in 18 times under the 200 ms line, while the ≥ 500 req/s target was met at 5% over.
+  Tighten the latency SLO only against production traffic — the M6 profile is one shape of load on
+  one host.
+- **The error-rate SLI did not see a 5xx to count.** The application returned zero non-2xx
+  responses in every scenario. Past the knee the *client* lost 1.9% of iterations at connection
+  level, and none of that reaches `http_requests_total` (finding F5 in the
+  [bottleneck analysis](../performance/bottleneck-analysis.md)). An availability SLI built on
+  server-side counters cannot see a request the server never accepted. Closing that gap needs a
+  bound in the application that rejects rather than queues, so the loss becomes a 503 the SLI
+  records.
+
+The latency histogram bucket edges hold up under measurement: with P95 near 10 ms the reading
+falls well inside the lowest buckets, so the 0.2 s and 0.45 s edges matter only when the service
+is near its targets, which is exactly when they are needed.
 
 ## Error Budget
 - Budget = `100% − SLO`. At 99.9% that is **0.1% → ~43 min/month**. The availability SLO and the "< 0.1% 5xx" error rate are the **same budget** expressed two ways.
