@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Timeouts, retries and a circuit breaker on every dependency call.** New `app/resilience/`
+  package: the guard composes breaker → timeout → retry around each repository method, so a
+  dependency failure now costs a bounded, configured amount of time and then becomes an answer.
+  MySQL gains a **5 s connect timeout** and a **2 s server-side `max_execution_time`**, so a
+  runaway query is killed and its connection returns to the pool instead of staying pinned to it.
+  Reads retry once with full jitter and a rollback between attempts; **writes never retry**. Five
+  consecutive failures open the circuit for 10 s, after which one probe decides. Four new series —
+  `dependency_timeouts_total`, `dependency_retries_total`, `circuit_breaker_state` and
+  `circuit_breaker_transitions_total` — say which dependency failed and what the breaker did about
+  it. Reasoning in
+  [ADR-0012](architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md).
 - **A fault injector, and a baseline of what breaks without one.** Toxiproxy runs behind a new
   `chaos` compose profile, `scripts/inject_fault.py` drives it, and
   [chaos-test-runbook.md](resilience/chaos-test-runbook.md) is the procedure. The baseline in
@@ -15,6 +26,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   unreachable MySQL costs **10 s and then a 500**, and a dead Redis costs **2 s on every request**
   because the degrade latch resets each time. Readiness returns 503 when only Redis is down, which
   pulls a healthy replica out of rotation for a fault ADR-0004 calls a latency event.
+
+### Removed
+- `pybreaker` leaves `requirements.txt`. The breaker in `app/resilience/breaker.py` is a state
+  machine over an injected clock, which the package's own clock cannot be, and its storage,
+  listener and threading model were all cost in a single-threaded event loop (ADR-0012).
 
 ### Changed
 - **The M6 load test is reported, and all five performance targets pass.** Three replicas held

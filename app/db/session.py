@@ -39,6 +39,19 @@ def build_engine_kwargs(settings: Settings) -> dict[str, Any]:
             "DB_MAX_OVERFLOW must not be negative; SQLAlchemy reads a negative value as "
             "unlimited overflow, which removes the ceiling the capacity model assumes."
         )
+    if settings.db_connect_timeout_seconds <= 0:
+        raise ValueError(
+            "DB_CONNECT_TIMEOUT_SECONDS must be positive; aiomysql reads a non-positive value "
+            "as no timeout, so a blackholed host holds the request until the kernel gives up."
+        )
+    if settings.db_statement_timeout_seconds <= 0:
+        raise ValueError(
+            "DB_STATEMENT_TIMEOUT_SECONDS must be positive; MySQL reads max_execution_time=0 "
+            "as no limit, so a runaway query keeps its connection until it finishes."
+        )
+        # MySQL takes this in milliseconds. Passing seconds would make a 2 s bound a 2 ms bound,
+        # and every SELECT would fail under a name that reads like a success.
+    statement_timeout_ms = int(settings.db_statement_timeout_seconds * 1000)
     return {
         "pool_size": settings.db_pool_size,
         "max_overflow": settings.db_max_overflow,
@@ -47,6 +60,15 @@ def build_engine_kwargs(settings: Settings) -> dict[str, Any]:
         # A connection the server closed underneath the pool must fail on checkout, where a
         # retry is cheap, not mid-statement where it is a 500.
         "pool_pre_ping": True,
+        "connect_args": {
+            "connect_timeout": settings.db_connect_timeout_seconds,
+            # The server-side half of the statement bound. A client that gives up alone leaves
+            # MySQL running the query and the connection pinned to it, so the pool loses the
+            # connection for the length of the query rather than the length of the timeout.
+            # `max_execution_time` covers read-only SELECT statements; writes are bounded by
+            # the client timeout and by `innodb_lock_wait_timeout`.
+            "init_command": f"SET SESSION max_execution_time={statement_timeout_ms}",
+        },
     }
 
 

@@ -75,7 +75,6 @@ pluggy==1.6.0
 prometheus_client==0.25.0
 protobuf==7.35.1
 py-serializable==2.1.0
-pybreaker==1.4.1
 pycparser==3.0
 pydantic==2.13.4
 pydantic-settings==2.14.2

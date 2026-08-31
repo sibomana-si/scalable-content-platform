@@ -36,4 +36,3 @@ opentelemetry-instrumentation-redis
 
 # --- Resilience ---
 tenacity>=8.2                  # retries with backoff
-pybreaker>=1.2                 # circuit breaker

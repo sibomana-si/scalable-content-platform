@@ -69,6 +69,37 @@ class Settings(BaseSettings):
     # login-heavy deployments with headroom, lower it under a tight limit.
     password_hash_max_threads: int = 4
 
+    # --- Resilience ---
+    # Every call to a dependency needs a ceiling at both ends. These are the ceilings; the
+    # rules that keep them consistent live in `app/resilience/policy.py`, which refuses an
+    # unbounded or self-contradictory set at start-up rather than under load.
+    #
+    # aiomysql opens a socket with no connect timeout by default, so a blackholed host holds
+    # the request until the kernel gives up, which is minutes.
+    db_connect_timeout_seconds: float = 5.0
+    # The server-side kill, sent as `max_execution_time` on every new connection. A client that
+    # gives up alone leaves MySQL running the query and the connection pinned to it.
+    db_statement_timeout_seconds: float = 2.0
+    # The client-side ceiling over the whole guarded call, retries included. It must exceed the
+    # statement timeout, so the server kills a runaway query before the client abandons it.
+    db_call_timeout_seconds: float = 3.0
+    # Attempts, not retries: 2 means one retry. Reads only. A retried write is a second write,
+    # and nothing downstream can tell the two apart.
+    db_retry_attempts: int = 2
+    # Full jitter between attempts: each wait is drawn from `[0, min(base * 2**n, max)]`. A
+    # fixed wait re-synchronizes every replica onto the same instant, which is the stampede the
+    # backoff exists to prevent.
+    retry_backoff_base_seconds: float = 0.05
+    retry_backoff_max_seconds: float = 0.5
+    # Consecutive failures that open the circuit. Low enough to stop paying the timeout early,
+    # high enough that one slow query is not an outage.
+    breaker_failure_threshold: int = 5
+    # How long an open circuit fails fast before it admits a probe.
+    breaker_reset_seconds: float = 10.0
+    # Probes admitted while half-open. More than one turns recovery into a thundering herd
+    # against the dependency that just came back.
+    breaker_half_open_max_calls: int = 1
+
     # --- Health probes ---
     # Per-dependency ceiling for /health/ready. Kubernetes' probe `timeoutSeconds` should be
     # at least this, or the orchestrator gives up while the handler is still working.
