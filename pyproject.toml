@@ -7,6 +7,7 @@ pythonpath = ["."]  # flat layout: put repo root on sys.path so `import app` res
 testpaths = ["tests"]
 markers = [
     "integration: requires live MySQL/Redis containers (docker compose up locally; CI service containers)",
+    "chaos: requires toxiproxy behind the compose chaos profile (docker compose --profile chaos up -d); skipped when the control port is closed",
     "scale: requires the app image and the compose scale profile (docker compose --profile scale up -d --build --scale app=3); skipped in CI, which does not build the image",
 ]
 

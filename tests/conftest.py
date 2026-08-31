@@ -8,6 +8,7 @@ services, runs them and fails loudly if a reachable dependency is misconfigured
 """
 
 import itertools
+import os
 import socket
 from collections.abc import AsyncGenerator, Awaitable, Callable
 from datetime import datetime
@@ -30,6 +31,11 @@ from app.core.security import create_access_token
 from app.db.session import get_engine, get_sessionmaker
 from app.main import create_app
 from app.models import Article, Role, User
+
+# The chaos harness addresses the injector, not a dependency, so it has no Settings field.
+TOXIPROXY_URL = os.environ.get("TOXIPROXY_URL", "http://localhost:8474")
+TOXIPROXY_MYSQL_PORT = int(os.environ.get("TOXIPROXY_MYSQL_PORT", "23306"))
+TOXIPROXY_REDIS_PORT = int(os.environ.get("TOXIPROXY_REDIS_PORT", "26379"))
 
 
 def _port_open(host: str, port: int) -> bool:
@@ -69,6 +75,21 @@ def redis_available() -> None:
     host, port = url.hostname or "localhost", url.port or 6379
     if not _port_open(host, port):
         pytest.skip(f"Redis not reachable at {host}:{port}")
+
+
+@pytest.fixture
+def chaos_available() -> None:
+    """Skip unless the toxiproxy control port is reachable.
+
+    CI runs a bare ``pytest`` with no marker selection, so a chaos test must decide for itself
+    whether the harness is there. Gating on the port, not on a query, keeps a present-but-broken
+    injector loud: the test runs and fails rather than skipping.
+    """
+
+    url = urlparse(TOXIPROXY_URL)
+    host, port = url.hostname or "localhost", url.port or 8474
+    if not _port_open(host, port):
+        pytest.skip(f"toxiproxy not reachable at {host}:{port}")
 
 
 # --- Database harness (integration/acceptance) ----------------------------------------------------

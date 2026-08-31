@@ -38,6 +38,13 @@ REQUIRED_KEYS = frozenset(
     }
 )
 
+# A chaos run adds a second process to the same silicon. `toxiproxy_cpuset` records where it ran,
+# and a claim about latency under fault needs that. The key is not in `REQUIRED_KEYS` on purpose:
+# every snapshot already in `docs/performance/results/` was written before it existed, and
+# re-running the M6 matrix to regenerate them is not proportionate. Pass this set to `validate`,
+# `load`, `is_citable` or `repeat_is_consistent` for a chaos pair.
+CHAOS_REQUIRED_KEYS = REQUIRED_KEYS | {"toxiproxy_cpuset"}
+
 # An absolute throttle cap is off by default, because the first matrix measured what it was
 # guessing at. Four runs on this chassis produced package deltas of 16,015 (A), 11,859 (B),
 # 2,123 (C) and 11,468 (B2). The spread tracks how long each run spent saturated, not how far the
@@ -59,7 +66,7 @@ class MetadataError(ValueError):
     """A snapshot is unreadable or incomplete, so no result built on it can be cited."""
 
 
-def load(path: str | Path) -> dict:
+def load(path: str | Path, *, required: frozenset[str] | set[str] = REQUIRED_KEYS) -> dict:
     """Read one snapshot from disk."""
 
     path = Path(path)
@@ -69,13 +76,13 @@ def load(path: str | Path) -> dict:
         raise MetadataError(f"cannot read the run metadata at {path}: {error}") from error
     if not isinstance(payload, dict):
         raise MetadataError(f"the run metadata at {path} is not a JSON object")
-    return validate(payload)
+    return validate(payload, required=required)
 
 
-def validate(snapshot: dict) -> dict:
+def validate(snapshot: dict, *, required: frozenset[str] | set[str] = REQUIRED_KEYS) -> dict:
     """Return the snapshot, or raise naming every key it lacks."""
 
-    missing = sorted(REQUIRED_KEYS - set(snapshot))
+    missing = sorted(set(required) - set(snapshot))
     if missing:
         raise MetadataError(f"run metadata is missing {', '.join(missing)}")
     return snapshot
@@ -91,7 +98,11 @@ def throttle_delta(before: dict, after: dict) -> dict[str, int]:
 
 
 def is_citable(
-    before: dict, after: dict, *, max_package_delta: int | None = DEFAULT_MAX_PACKAGE_DELTA
+    before: dict,
+    after: dict,
+    *,
+    max_package_delta: int | None = DEFAULT_MAX_PACKAGE_DELTA,
+    required: frozenset[str] | set[str] = REQUIRED_KEYS,
 ) -> tuple[bool, list[str]]:
     """Decide whether the pair of snapshots supports a citable result.
 
@@ -99,8 +110,8 @@ def is_citable(
     run to discover the rest.
     """
 
-    validate(before)
-    validate(after)
+    validate(before, required=required)
+    validate(after, required=required)
 
     reasons: list[str] = []
     if not (before["ac_online"] and after["ac_online"]):
@@ -113,6 +124,11 @@ def is_citable(
     if before["k6_cpuset"] != after["k6_cpuset"]:
         reasons.append(
             f"the generator cpuset moved from {before['k6_cpuset']!r} to {after['k6_cpuset']!r}"
+        )
+    if before.get("toxiproxy_cpuset") != after.get("toxiproxy_cpuset"):
+        reasons.append(
+            f"the fault injector cpuset moved from {before.get('toxiproxy_cpuset')!r} to "
+            f"{after.get('toxiproxy_cpuset')!r}"
         )
     if max_package_delta is not None:
         delta = throttle_delta(before, after)
@@ -148,6 +164,7 @@ def repeat_is_consistent(
     repeat: tuple[dict, dict],
     *,
     max_drift: float = DEFAULT_MAX_THROTTLE_DRIFT,
+    required: frozenset[str] | set[str] = REQUIRED_KEYS,
 ) -> tuple[bool, list[str]]:
     """Decide whether a run and its repeat met the same machine.
 
@@ -158,7 +175,7 @@ def repeat_is_consistent(
 
     reasons: list[str] = []
     for label, (before, after) in (("run", run), ("repeat", repeat)):
-        _, run_reasons = is_citable(before, after)
+        _, run_reasons = is_citable(before, after, required=required)
         reasons.extend(f"{label}: {reason}" for reason in run_reasons)
 
     first = throttle_delta(*run)["package"]

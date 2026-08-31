@@ -98,6 +98,7 @@ nav:
       - Load Test Report: performance/load-test-report.md
   - Resilience:
       - Fault Tolerance Design: resilience/fault-tolerance-design.md
+      - Chaos Test Runbook: resilience/chaos-test-runbook.md
       - Chaos Test Report: resilience/chaos-test-report.md
   - Development:
       - Testing Strategy & TDD: development/testing-strategy.md
