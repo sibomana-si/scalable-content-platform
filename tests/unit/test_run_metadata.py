@@ -12,6 +12,7 @@ import json
 import pytest
 
 from scripts.run_metadata import (
+    CHAOS_REQUIRED_KEYS,
     DEFAULT_MAX_THROTTLE_DRIFT,
     REQUIRED_KEYS,
     MetadataError,
@@ -294,3 +295,72 @@ def test_the_absolute_cap_still_applies_when_asked_for() -> None:
 
     assert not citable
     assert any("throttle" in reason for reason in reasons)
+
+
+# --- chaos runs carry one more key ---------------------------------------------------------------
+#
+# M7 puts a fault injector on the same silicon as the system under test, so a chaos snapshot must
+# record where that injector ran. The M6 snapshots on disk were written before the key existed, and
+# re-running the matrix to regenerate them is not proportionate. So the required set is a
+# parameter: the M6 files keep validating against `REQUIRED_KEYS`, and a chaos pair is checked
+# against `CHAOS_REQUIRED_KEYS`.
+
+
+def a_chaos_snapshot(**overrides: object) -> dict:
+    return a_snapshot(**{"toxiproxy_cpuset": "0-11", **overrides})
+
+
+def test_the_chaos_key_set_adds_the_injector_and_keeps_everything_else() -> None:
+    assert REQUIRED_KEYS | {"toxiproxy_cpuset"} == CHAOS_REQUIRED_KEYS
+
+
+def test_a_chaos_snapshot_validates_against_the_chaos_keys() -> None:
+    snapshot = a_chaos_snapshot()
+
+    assert validate(snapshot, required=CHAOS_REQUIRED_KEYS) == snapshot
+
+
+def test_a_load_snapshot_fails_the_chaos_keys_and_names_the_missing_one() -> None:
+    """A chaos result built on a snapshot with no injector cpuset cannot be cited."""
+
+    with pytest.raises(MetadataError, match="toxiproxy_cpuset"):
+        validate(a_snapshot(), required=CHAOS_REQUIRED_KEYS)
+
+
+def test_the_load_snapshots_already_on_disk_still_validate() -> None:
+    """The M6 files predate the key. The default required set must not break them."""
+
+    assert validate(a_snapshot()) == a_snapshot()
+
+
+def test_a_chaos_pair_is_citable_when_the_injector_stayed_put() -> None:
+    citable, reasons = is_citable(
+        a_chaos_snapshot(), a_chaos_snapshot(), required=CHAOS_REQUIRED_KEYS
+    )
+
+    assert citable, reasons
+
+
+def test_moving_the_injector_mid_run_is_not_citable() -> None:
+    """The injector competing with the application for a P-core changes the latency it measures."""
+
+    citable, reasons = is_citable(
+        a_chaos_snapshot(),
+        a_chaos_snapshot(toxiproxy_cpuset="12-19"),
+        required=CHAOS_REQUIRED_KEYS,
+    )
+
+    assert not citable
+    assert any("0-11" in reason and "12-19" in reason for reason in reasons)
+
+
+def test_a_repeat_pair_can_be_held_to_the_chaos_keys() -> None:
+    run = (a_chaos_snapshot(package_throttle_count=0), a_chaos_snapshot(package_throttle_count=100))
+    repeat = (
+        a_chaos_snapshot(package_throttle_count=0),
+        a_chaos_snapshot(package_throttle_count=104),
+    )
+
+    consistent, reasons = repeat_is_consistent(run, repeat, required=CHAOS_REQUIRED_KEYS)
+
+    assert consistent, reasons

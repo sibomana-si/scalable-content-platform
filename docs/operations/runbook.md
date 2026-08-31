@@ -1,6 +1,6 @@
 # Runbook / Operations Manual
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-24
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-31
 
 Day-2 operations reference.
 
@@ -23,6 +23,11 @@ _Link to [alerting runbooks](../observability/alerting-runbooks.md). Add inciden
 To repeat a load measurement, follow the [load test runbook](../performance/load-test-runbook.md).
 It covers the prerequisites, the four-run matrix, results collection, the checks that decide
 whether a run is citable, and restoring the machine afterwards.
+
+## Fault Injection
+To repeat a chaos experiment, follow the [chaos test runbook](../resilience/chaos-test-runbook.md).
+It covers the prerequisites, the four faults the injector offers, the experiment set, the checks
+that decide whether a run is citable, and clearing every toxic afterwards.
 
 ## Incident Response
 - Severity definitions: _TBD_

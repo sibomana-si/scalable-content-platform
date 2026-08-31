@@ -6,6 +6,16 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- **A fault injector, and a baseline of what breaks without one.** Toxiproxy runs behind a new
+  `chaos` compose profile, `scripts/inject_fault.py` drives it, and
+  [chaos-test-runbook.md](resilience/chaos-test-runbook.md) is the procedure. The baseline in
+  [chaos-test-report.md](resilience/chaos-test-report.md) records what the system does today: a 3 s
+  delay on the MySQL socket turns a 14 ms read into a **12 s read that still returns 200**, an
+  unreachable MySQL costs **10 s and then a 500**, and a dead Redis costs **2 s on every request**
+  because the degrade latch resets each time. Readiness returns 503 when only Redis is down, which
+  pulls a healthy replica out of rotation for a fault ADR-0004 calls a latency event.
+
 ### Changed
 - **The M6 load test is reported, and all five performance targets pass.** Three replicas held
   **525 req/s for five minutes** at a read P95 of **10.9 ms**, a write P95 of **26.2 ms**, and zero

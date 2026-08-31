@@ -5,6 +5,7 @@
 #   docker compose --profile observability up -d                # + prometheus + grafana
 #   docker compose --profile scale up -d --build --scale app=3  # + app replicas behind nginx
 #   docker compose --profile load run --rm k6 run /scripts/selftest.js   # the load generator
+#   docker compose --profile chaos up -d                        # + toxiproxy, the fault injector
 #
 # Everything beyond mysql and redis sits behind a profile, so a plain `docker compose up -d`
 # stays exactly what the integration suite requires and nothing more.
@@ -153,6 +154,36 @@ services:
       # Used only when a run adds `-o experimental-prometheus-rw`.
       K6_PROMETHEUS_RW_SERVER_URL: http://prometheus:9090/api/v1/write
       K6_PROMETHEUS_RW_TREND_STATS: "p(50),p(95),p(99),max"
+
+  # --- chaos profile: the fault injector (M7) ---
+  #
+  # Toxiproxy sits between the application and each dependency, so a fault is injected at the
+  # network and not by stopping a container. Stopping MySQL is a blunt instrument: it cannot
+  # express "slow" and it loses the data. See docs/resilience/chaos-test-runbook.md.
+  #
+  # Point the application at the proxy ports for a chaos run:
+  #   MYSQL_PORT=23306 REDIS_URL=redis://localhost:26379/0 uvicorn app.main:app
+  toxiproxy:
+    image: ghcr.io/shopify/toxiproxy:2.12.0
+    profiles: [chaos]
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    # The proxies are declared in a file, so `inject_fault.py` only ever manages toxics. A
+    # missing proxy then fails at start-up rather than in the middle of an experiment.
+    command: ["-host=0.0.0.0", "-config=/config/toxiproxy.json"]
+    # The six P-cores, beside the service it proxies and away from the eight E-cores k6 owns.
+    # An injector that floats across all 20 threads competes with the generator, and the run
+    # then measures the contention rather than the fault.
+    cpuset: "${TOXIPROXY_CPUSET:-0-11}"
+    ports:
+      - "8474:8474"   # the control API that scripts/inject_fault.py drives
+      - "23306:23306" # MySQL through the proxy
+      - "26379:26379" # Redis through the proxy
+    volumes:
+      - ./toxiproxy/toxiproxy.json:/config/toxiproxy.json:ro
 
 volumes:
   prometheus-data:

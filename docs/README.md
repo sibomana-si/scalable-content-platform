@@ -54,6 +54,7 @@ Documentation for the **Scalable Content Platform Backend**.
 
 ## Resilience
 - [Fault Tolerance Design](resilience/fault-tolerance-design.md) — 🟩
+- [Chaos Test Runbook](resilience/chaos-test-runbook.md) — ✅
 - [Chaos / Failure-Injection Report](resilience/chaos-test-report.md) — 🟨
 
 ## Development

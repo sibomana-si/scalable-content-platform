@@ -1,6 +1,6 @@
 # Testing Strategy & TDD Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-24
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-31
 
 How this project writes tests — and, more importantly, **when**: tests are written *before* the code
 they verify. This document is the practical companion to two requirements that already exist:
@@ -74,6 +74,7 @@ there is one set of tests, not a "CI suite" and a "local suite."
 |---|---|---|
 | _(none)_ | Nothing. Unit and smoke tests. | Yes |
 | `integration` | MySQL and Redis, via `docker compose up -d` | Yes |
+| `chaos` | Toxiproxy, via `docker compose --profile chaos up -d` | **No** |
 | `scale` | The app image and the compose scale profile | **No** |
 
 Both marked suites skip on **port reachability**, not on a failed query: a local `pytest` with
@@ -83,6 +84,7 @@ reachable dependency is misconfigured rather than masking it as a skip.
 ```bash
 pytest -q                 # unit + smoke; the rest skip
 pytest -m integration     # needs docker compose up -d
+pytest -m chaos           # needs docker compose --profile chaos up -d
 pytest -m scale           # needs docker compose --profile scale up -d --build --scale app=3
 ```
 
@@ -150,7 +152,10 @@ test's read looks like a phantom rather than like leaked state.
   consistency check, the replica scrape configuration, the hot-set picker, the run-metadata schema,
   and every optimization the measurement leads to were all written test-first. What was not: the
   three k6 scenarios, whose output *is* the assertion, and `scripts/perf_env.sh`, which is shell
-  over `/sys` and is verified by running it.
+  over `/sys` and is verified by running it. **M7 divides the same way.** The four chaos
+  experiments are validation. The timeout, retry, circuit-breaker, load-shed and fallback
+  decisions are ordinary application behavior with silent failure modes, so they were written
+  test-first, and so were the fault injector and the chaos runbook.
 
 ## 4. Tooling & commands
 

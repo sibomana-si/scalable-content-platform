@@ -23,6 +23,9 @@ set -euo pipefail
 
 SETTLE_SECONDS="${SETTLE_SECONDS:-3}"
 K6_CPUSET="${K6_CPUSET:-12-19}"
+# The fault injector is a process too. A chaos run that does not record where it sat cannot
+# support a claim about latency under fault. Default: the P-cores, beside the service it proxies.
+TOXIPROXY_CPUSET="${TOXIPROXY_CPUSET:-0-11}"
 CPU_SYS=/sys/devices/system/cpu
 RAPL=/sys/class/powercap/intel-rapl:0
 
@@ -92,6 +95,7 @@ json_snapshot() {
   "package_throttle_count": ${package},
   "core_throttle_count": ${core},
   "k6_cpuset": "${K6_CPUSET}",
+  "toxiproxy_cpuset": "${TOXIPROXY_CPUSET}",
   "ac_online": ${ac},
   "loadavg": ${load}
 }
@@ -115,7 +119,7 @@ cmd_lock() {
   echo "perf_env: locked · profile=$(powerprofilesctl get)" \
     "governor=$(read_first unknown "$CPU_SYS/cpu0/cpufreq/scaling_governor")" \
     "epp=$(read_first unknown "$CPU_SYS/cpu0/cpufreq/energy_performance_preference")" \
-    "k6_cpuset=${K6_CPUSET}"
+    "k6_cpuset=${K6_CPUSET}" "toxiproxy_cpuset=${TOXIPROXY_CPUSET}"
 }
 
 cmd_report() {
