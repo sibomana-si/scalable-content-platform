@@ -201,5 +201,7 @@ Two changes to `.github/workflows/ci.yml` are due **when the first real test lan
 - [NFR — Maintainability](../requirements/non-functional-requirements.md) (coverage floor, test types, CI gates)
 - [Threat model](../security/threat-model.md) (source of security/abuse cases)
 - [ADR-0011 — k6 for load testing](../architecture/adr/0011-k6-for-load-testing.md) (why the load suite is not Python)
+- [ADR-0012 — Timeout, retry and circuit breaker policy](../architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md) (why the breaker's
+  tests drive an injected clock)
 - [Load test runbook](../performance/load-test-runbook.md) (how to repeat a measurement run)
 - [Load test plan](../performance/load-test-plan.md) · [Chaos test report](../resilience/chaos-test-report.md) (validation, outside TDD)

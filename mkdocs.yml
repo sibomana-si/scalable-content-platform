@@ -66,6 +66,7 @@ nav:
           - "0009 Observability stack": architecture/adr/0009-observability-stack.md
           - "0010 Generation counter invalidation": architecture/adr/0010-generation-counter-list-invalidation.md
           - "0011 k6 for load testing": architecture/adr/0011-k6-for-load-testing.md
+          - "0012 Timeout, retry and circuit breaker policy": architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md
           - Template: architecture/adr/template.md
   - API:
       - OpenAPI: api/openapi.md

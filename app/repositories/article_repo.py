@@ -6,6 +6,7 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.models import Article
+from app.resilience.guard import guarded_read, guarded_write
 
 # The columns a list page shows. `body` is deliberately absent: it is `MEDIUMTEXT`, it was 96.7%
 # of a measured list page, and MySQL reads it off disk for every row it returns.
@@ -59,6 +60,7 @@ class ArticleRepository:
     def __init__(self, session: AsyncSession) -> None:
         self._session = session
 
+    @guarded_write("mysql")
     async def create(self, *, author_id: int, title: str, body: str) -> Article:
         article = Article(author_id=author_id, title=title, body=body)
         self._session.add(article)
@@ -66,10 +68,12 @@ class ArticleRepository:
         await self._session.refresh(article)  # pick up server-generated timestamps
         return article
 
+    @guarded_read("mysql")
     async def get(self, article_id: int) -> Article | None:
         stmt = select(Article).where(Article.id == article_id, Article.deleted_at.is_(None))
         return (await self._session.execute(stmt)).scalar_one_or_none()
 
+    @guarded_read("mysql")
     async def list(
         self, *, limit: int, after: tuple[datetime, int] | None = None, author_id: int | None = None
     ) -> list[Row[tuple[int, int, str, datetime, datetime]]]:
@@ -81,6 +85,7 @@ class ArticleRepository:
         stmt = build_list_query(limit=limit, after=after, author_id=author_id)
         return list((await self._session.execute(stmt)).all())
 
+    @guarded_write("mysql")
     async def update_cas(
         self, article_id: int, expected_updated_at: datetime, *, title: str, body: str
     ) -> int:
@@ -107,6 +112,7 @@ class ArticleRepository:
         self._session.expire_all()
         return cast(CursorResult, result).rowcount
 
+    @guarded_write("mysql")
     async def soft_delete_cas(self, article_id: int, expected_updated_at: datetime) -> int:
         """Compare-and-set soft delete; same single-statement guarantees as update."""
 

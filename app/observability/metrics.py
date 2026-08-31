@@ -21,6 +21,7 @@ from prometheus_client import (
     REGISTRY,
     CollectorRegistry,
     Counter,
+    Gauge,
     Histogram,
     disable_created_metrics,
     generate_latest,
@@ -55,6 +56,19 @@ CACHE_ENTITIES = frozenset({"article", "list", "other"})
 # The only values the cache ``operation`` label may take. Each names a cache call site, so
 # a degradation graph shows which half of the cache is failing.
 CACHE_OPERATIONS = frozenset({"get", "set", "delete", "incr", "lock", "other"})
+
+# The only values the ``dependency`` label may take. It names a dependency, not a host: a
+# connection string as a label would mint one series per replica of MySQL.
+DEPENDENCIES = frozenset({"mysql", "redis", "other"})
+
+# The only values the retry ``outcome`` label may take. The counter counts operations that
+# needed a retry, so the two real values answer one question: did the retry help?
+RETRY_OUTCOMES = frozenset({"success", "exhausted", "other"})
+
+# The only values the breaker ``to_state`` label may take, and the numbers the gauge reports.
+# Ordered by severity so a graph reads upward: closed is healthy, open is shed.
+BREAKER_STATE_VALUES = {"closed": 0, "half_open": 1, "open": 2}
+BREAKER_STATES = frozenset(BREAKER_STATE_VALUES) | {"other"}
 
 # Boundaries deliberately include 0.2 and 0.45: the SLO is P95 < 200 ms / P99 < 450 ms, and
 # `histogram_quantile` interpolates within a bucket, so a quantile is only trustworthy at a
@@ -112,6 +126,10 @@ class Metrics:
     cache_hits: Counter
     cache_misses: Counter
     cache_errors: Counter
+    dependency_timeouts: Counter
+    dependency_retries: Counter
+    breaker_state: Gauge
+    breaker_transitions: Counter
 
 
 def build_metrics(registry: CollectorRegistry) -> Metrics:
@@ -156,6 +174,36 @@ def build_metrics(registry: CollectorRegistry) -> Metrics:
             "cache_errors_total",
             "Cache operations that failed and were degraded around.",
             ["operation"],
+            registry=registry,
+        ),
+        # A dependency that answers late is a different failure from one that answers an
+        # error, and the two need different fixes. This counter separates them.
+        dependency_timeouts=Counter(
+            "dependency_timeouts_total",
+            "Dependency calls abandoned at their timeout.",
+            ["dependency"],
+            registry=registry,
+        ),
+        # Counts operations that were retried, not attempts. A retry that fixes nothing is
+        # latency the caller paid twice, so the outcome is the point of the series.
+        dependency_retries=Counter(
+            "dependency_retries_total",
+            "Operations retried after a transient dependency failure, by final outcome.",
+            ["dependency", "outcome"],
+            registry=registry,
+        ),
+        # 0 closed, 1 half-open, 2 open. A gauge rather than a counter: the question an
+        # operator asks during an incident is what the breaker is doing now.
+        breaker_state=Gauge(
+            "circuit_breaker_state",
+            "Circuit breaker state: 0 closed, 1 half-open, 2 open.",
+            ["dependency"],
+            registry=registry,
+        ),
+        breaker_transitions=Counter(
+            "circuit_breaker_transitions_total",
+            "Circuit breaker state changes.",
+            ["dependency", "to_state"],
             registry=registry,
         ),
     )
@@ -219,6 +267,55 @@ def observe_cache_miss(entity: str, *, metrics: Metrics = METRICS) -> None:
 def observe_cache_error(operation: str, *, metrics: Metrics = METRICS) -> None:
     """Record one degraded cache operation."""
     metrics.cache_errors.labels(operation=cache_operation(operation)).inc()
+
+
+def dependency_label(dependency: Any) -> str:
+    """Bucket a dependency name into the closed label set."""
+    return dependency if dependency in DEPENDENCIES else "other"
+
+
+def retry_outcome(outcome: Any) -> str:
+    """Bucket a retry outcome into the closed label set."""
+    return outcome if outcome in RETRY_OUTCOMES else "other"
+
+
+def breaker_state_label(state: Any) -> str:
+    """Bucket a breaker state name into the closed label set."""
+    return state if state in BREAKER_STATES else "other"
+
+
+def observe_dependency_timeout(dependency: str, *, metrics: Metrics = METRICS) -> None:
+    """Record one dependency call abandoned at its timeout."""
+    metrics.dependency_timeouts.labels(dependency=dependency_label(dependency)).inc()
+
+
+def observe_retry(dependency: str, outcome: str, *, metrics: Metrics = METRICS) -> None:
+    """Record one retried operation under the outcome the retries reached."""
+    metrics.dependency_retries.labels(
+        dependency=dependency_label(dependency), outcome=retry_outcome(outcome)
+    ).inc()
+
+
+def set_breaker_state(dependency: str, state: str, *, metrics: Metrics = METRICS) -> None:
+    """Report what the breaker is doing now, without claiming it moved.
+
+    A breaker publishes its state when it is built, so an operator can tell a closed breaker
+    from a dependency nobody has called yet. That is not a transition, so it is counted nowhere.
+    """
+    label = breaker_state_label(state)
+    metrics.breaker_state.labels(dependency=dependency_label(dependency)).set(
+        BREAKER_STATE_VALUES.get(label, 0)
+    )
+
+
+def observe_breaker_transition(
+    dependency: str, to_state: str, *, metrics: Metrics = METRICS
+) -> None:
+    """Record one breaker state change, and set the gauge to the state it reached."""
+    set_breaker_state(dependency, to_state, metrics=metrics)
+    metrics.breaker_transitions.labels(
+        dependency=dependency_label(dependency), to_state=breaker_state_label(to_state)
+    ).inc()
 
 
 def observe_query(statement: Any, duration_seconds: float, *, metrics: Metrics = METRICS) -> None:
