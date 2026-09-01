@@ -1,6 +1,6 @@
 # Dashboards Catalog
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-20
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-01
 
 What each Grafana dashboard shows and how to read it.
 
@@ -14,14 +14,23 @@ and are provisioned read-only (`allowUiUpdates: false`), so the repo is the sour
 | API Overview (RED) | `scp-api-overview` | Service health and the SLO view | Availability, request rate, error ratio (5xx/4xx), P50/P95/P99, P95 by route, status classes, CPU saturation, error budget consumed | `grafana/dashboards/api-overview.json` | ✅ M4 |
 | Database | `scp-database` | MySQL health | P95 SELECT latency, statements/s, statements **per request**, latency by statement type, read/write mix, share of request time in the DB, connection pool by state, pool utilization | `grafana/dashboards/database.json` | ✅ M4 (pool panels M5) |
 | Cache | `scp-cache` | Redis effectiveness | Hit ratio, degraded operations, hit ratio by entity, hits/misses by entity, degraded operations by type, database read rate | `grafana/dashboards/cache.json` | ✅ M5 |
-| Resilience | `scp-resilience` | Failure behavior | _Pending_ — timeouts, retries, circuit-breaker state, fallback rate | `grafana/dashboards/resilience.json` | ⏳ M7 |
+| Resilience | `scp-resilience` | Failure behavior | Circuit-breaker state and transitions by dependency, timeouts per dependency, retry rate with the retry success ratio, degraded responses by reason, requests in flight against the shed ceiling | `grafana/dashboards/resilience.json` | ✅ M7 |
 
-**Why one dashboard ships empty.** The resilience counters land with the chaos work (M7). A
-panel querying a metric nobody exports renders `No data` indefinitely, which is indistinguishable
-from an outage — so it ships as a provisioned placeholder that states what it will contain and
-when. `tests/unit/test_dashboards.py` enforces both halves of that rule: no panel may query an
-unexported metric, and a pending dashboard must say it is pending. Cache left this list in M5,
-when the cache-aside read path gave its panels something to query.
+**Every dashboard now queries a live metric.** Resilience shipped as a provisioned placeholder
+from M4 to M6, because a panel querying a metric nobody exports renders `No data` indefinitely,
+which is indistinguishable from an outage. M7 exported the counters and filled the panels.
+`tests/unit/test_dashboards.py` enforces both halves of the rule: no panel may query an unexported
+metric, and a pending dashboard must say it is pending. The pending list is now empty.
+
+**Reading the Resilience dashboard.** It answers one question the RED dashboards cannot: is the
+service degrading on purpose? A 503 from an open breaker and a 503 from a crash look identical on
+an error-rate graph, and they need opposite responses. Read the breaker state first — 0 closed,
+1 half-open, 2 open — then `degraded_responses_total` by reason, which names the fix.
+`reason="upstream_timeout"` points at a slow dependency, `reason="breaker_open"` at a dead one,
+and `reason="load_shed"` at an instance that ran out of capacity, which is a scaling answer rather
+than a repair. The in-flight panel draws `MAX_INFLIGHT_REQUESTS` as a threshold, so the distance
+to the shed ceiling is visible before the shedding starts. Four alerts read the same series — see
+[alerting-runbooks](alerting-runbooks.md).
 
 **Reading the Cache dashboard.** Take the hit ratio and the degraded-operation rate together. A
 falling hit ratio with a flat error rate is a workload change. A falling hit ratio with a climbing

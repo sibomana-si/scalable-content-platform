@@ -1,6 +1,6 @@
 # Caching Strategy
 
-> **Status:** ✅ Implemented · **Owner:** Simon Sibomana · **Last updated:** 2026-08-27
+> **Status:** ✅ Implemented · **Owner:** Simon Sibomana · **Last updated:** 2026-09-01
 
 Redis cache-aside for hot reads, with invalidation on writes. The cache is an optimization and
 never a dependency: every path degrades to MySQL. See
@@ -92,7 +92,14 @@ to catch.
   pays the full socket timeout and a 2-second timeout becomes an 8-second request. The read still
   succeeds, which makes it worse: nothing fails and everything is slow. One failure is enough
   evidence to skip the rest. The latch lives for one request; the next request probes Redis
-  again. A cross-request circuit breaker is M7 work.
+  again.
+- **The breaker latches across requests.** The per-request latch cannot stop the *next* thousand
+  requests from each paying one socket timeout, because an instance forgets everything at the end
+  of the request that built it. So `ArticleCache` also consults the shared `redis` circuit breaker
+  (`app/resilience/breaker.py`): one failure per instance, so the count that opens the circuit
+  counts requests, not commands. While the circuit is open the cache sends no command at all, and
+  a single half-open probe closes it again. See
+  [ADR-0012](../architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md).
 - **Thundering herd:** single-flight. On a miss the reader claims a `SET NX` lock; the winner
   loads from MySQL and populates the key. A loser polls the key for up to
   `CACHE_LOCK_TIMEOUT_SECONDS` and then reads MySQL itself. A loser never waits on the lock

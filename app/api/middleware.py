@@ -3,7 +3,8 @@
 Registration order in :func:`app.main.create_app` is reversed by Starlette, so the chain
 runs outside in as:
 
-``RequestIDMiddleware`` → ``AccessLogMiddleware`` → ``MetricsMiddleware`` → ``AuthMiddleware``
+``RequestIDMiddleware`` → ``AccessLogMiddleware`` → ``MetricsMiddleware`` →
+``LoadShedMiddleware`` → ``AuthMiddleware``
 
 The correlation id is minted at the outermost layer so every inner layer — including the
 ``error_response`` envelopes built inside ``AuthMiddleware`` — can quote it. All layers share
@@ -31,7 +32,7 @@ from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoin
 from starlette.requests import Request
 from starlette.responses import Response
 
-from app.api.errors import error_response
+from app.api.errors import error_response, retry_after_header
 from app.core.security import decode_access_token
 from app.observability.context import (
     REQUEST_ID_HEADER,
@@ -40,7 +41,16 @@ from app.observability.context import (
     sanitize_request_id,
 )
 from app.observability.logging import get_logger
-from app.observability.metrics import METRICS_PATH, PROBE_PATHS, observe_request, route_label
+from app.observability.metrics import (
+    METRICS,
+    METRICS_PATH,
+    PROBE_PATHS,
+    Metrics,
+    observe_degraded_response,
+    observe_request,
+    route_label,
+    track_inflight,
+)
 from app.observability.tracing import annotate_current_span
 from app.services.exceptions import UnauthenticatedError
 
@@ -207,6 +217,80 @@ class MetricsMiddleware(BaseHTTPMiddleware):
             # every ratio computed from these counters.
             return
         observe_request(route, request.method, status, perf_counter() - started)
+
+
+class LoadShedMiddleware(BaseHTTPMiddleware):
+    """Refuse work past a measured ceiling, instead of queueing it.
+
+    M6 finding F5: past the knee, requests were lost at the connection level. The client
+    counted a dropped iteration, the server recorded no error, and no signal anywhere named
+    the cause. An instance that cannot serve a request must refuse it with a status the caller
+    can act on, and it must do so while the refusal is still cheap.
+
+    The counter is a plain integer, not a semaphore. A semaphore makes the caller wait for a
+    slot, and a waiting request is the thing this layer exists to prevent: it holds memory, it
+    holds a connection, and it disappoints the caller later instead of now. Waiting on nothing
+    also means no lock is needed — the event loop runs one task at a time between awaits, and
+    the counter never changes across one.
+
+    Probes and the metrics scrape are exempt. A shed liveness probe is a restart, a shed
+    readiness probe removes an instance that is still serving, and a shed scrape is a gap in
+    the data over exactly the window that explains the incident.
+    """
+
+    def __init__(
+        self,
+        app: Any,
+        *,
+        max_inflight: int,
+        retry_after_seconds: float,
+        metrics: Metrics = METRICS,
+    ) -> None:
+        if max_inflight < 1:
+            raise ValueError(
+                "MAX_INFLIGHT_REQUESTS must be at least 1; a lower ceiling sheds every "
+                "request, which is an outage spelled as a configuration."
+            )
+        if retry_after_seconds <= 0:
+            raise ValueError(
+                "SHED_RETRY_AFTER_SECONDS must be positive; a non-positive wait tells every "
+                "shed caller to come back at once, which is the stampede shedding prevents."
+            )
+        super().__init__(app)
+        self._max_inflight = max_inflight
+        self._retry_after = retry_after_seconds
+        self._metrics = metrics
+        self._inflight = 0
+
+    async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        path = request.url.path
+        if path == METRICS_PATH or path in PROBE_PATHS:
+            return await call_next(request)
+
+        if self._inflight >= self._max_inflight:
+            # The router never ran, so `route_label` resolves the template from the routing
+            # table instead of `scope["route"]`. That keeps a shed request attributable to the
+            # endpoint it asked for, which is what an operator needs to know what is saturating.
+            observe_degraded_response(
+                route_label(request.scope), "load_shed", metrics=self._metrics
+            )
+            logger.warning("request.shed", path=path, inflight=self._inflight)
+            return error_response(
+                request,
+                503,
+                "SERVICE_UNAVAILABLE",
+                "The service is at capacity. Retry shortly.",
+                headers=retry_after_header(self._retry_after),
+            )
+
+        self._inflight += 1
+        track_inflight(1, metrics=self._metrics)
+        try:
+            return await call_next(request)
+        finally:
+            # A leaked slot is worse than no ceiling: the instance sheds everything, for good.
+            self._inflight -= 1
+            track_inflight(-1, metrics=self._metrics)
 
 
 class AuthMiddleware(BaseHTTPMiddleware):

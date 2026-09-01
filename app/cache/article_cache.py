@@ -24,6 +24,7 @@ from app.observability.metrics import (
     observe_cache_hit,
     observe_cache_miss,
 )
+from app.resilience.breaker import CircuitBreaker, get_breaker
 
 log = structlog.get_logger(__name__)
 
@@ -33,11 +34,21 @@ CACHE_FAILURES = (RedisError, TimeoutError, OSError)
 
 
 class ArticleCache:
-    def __init__(self, redis: Any, *, metrics: Metrics = METRICS, enabled: bool = True) -> None:
+    def __init__(
+        self,
+        redis: Any,
+        *,
+        metrics: Metrics = METRICS,
+        enabled: bool = True,
+        breaker: CircuitBreaker | None = None,
+    ) -> None:
         self._redis = redis
         self._metrics = metrics
         self._enabled = enabled
         self._degraded = False
+        # Resolved on first use, never at construction: a disabled cache must read no settings
+        # and build nothing. `_NO_CACHE` in the service layer is built at import time.
+        self._breaker = breaker
 
     @property
     def enabled(self) -> bool:
@@ -48,9 +59,29 @@ class ArticleCache:
         """True once a command has failed on this instance."""
         return self._degraded
 
+    @property
+    def breaker(self) -> CircuitBreaker | None:
+        """The shared Redis breaker, or ``None`` while the cache is disabled or untouched."""
+        return self._breaker
+
     def _live(self) -> bool:
-        """Whether it is still worth sending a command."""
-        return self._enabled and not self._degraded
+        """Whether it is still worth sending a command.
+
+        Three gates, cheapest first. The configuration switch never changes. The per-instance
+        latch stops one request from paying the socket timeout four times over. The breaker
+        stops the next thousand requests from each paying it once — the latch cannot, because
+        an instance lives for one request and forgets everything at the end of it.
+        """
+        if not self._enabled or self._degraded:
+            return False
+        if self._breaker is None:
+            self._breaker = get_breaker("redis")
+        return self._breaker.allow()
+
+    def _succeed(self) -> None:
+        """Redis answered. Closes the circuit again when this call was the probe."""
+        if self._breaker is not None:
+            self._breaker.record_success()
 
     def _degrade(self, operation: str, error: Exception) -> None:
         """Count and log one failed cache operation, then stop using this instance.
@@ -65,6 +96,10 @@ class ArticleCache:
         the latch closes for that request only and the next one probes Redis again.
         """
         self._degraded = True
+        if self._breaker is not None:
+            # One failure per instance, so the count that opens the circuit counts requests,
+            # not commands. That is the right unit: the question is whether Redis is down.
+            self._breaker.record_failure()
         observe_cache_error(operation, metrics=self._metrics)
         log.warning("cache.degraded", operation=operation, error=str(error))
 
@@ -87,10 +122,12 @@ class ArticleCache:
         if not self._live():
             return None
         try:
-            return await self._redis.get(key)
+            value = await self._redis.get(key)
         except CACHE_FAILURES as error:
             self._degrade("get", error)
             return None
+        self._succeed()
+        return value
 
     async def _get(self, key: str, entity: str) -> str | None:
         if not self._live():
@@ -102,6 +139,7 @@ class ArticleCache:
         except CACHE_FAILURES as error:
             self._degrade("get", error)
             return None
+        self._succeed()
         if value is None:
             observe_cache_miss(entity, metrics=self._metrics)
             return None
@@ -124,6 +162,7 @@ class ArticleCache:
         except CACHE_FAILURES as error:
             self._degrade("get", error)
             return 0, 0
+        self._succeed()
         parsed = [_as_int(value) for value in values]
         parsed += [0] * (2 - len(parsed))
         return parsed[0], parsed[1]
@@ -145,6 +184,8 @@ class ArticleCache:
             await self._redis.set(key, body, ex=max(1, ttl_seconds))
         except CACHE_FAILURES as error:
             self._degrade("set", error)
+            return
+        self._succeed()
 
     async def invalidate_article(self, article_id: int) -> None:
         """Drop one cached article body. Called after the write commits."""
@@ -154,6 +195,8 @@ class ArticleCache:
             await self._redis.delete(article_key(article_id))
         except CACHE_FAILURES as error:
             self._degrade("delete", error)
+            return
+        self._succeed()
 
     async def bump_generations(self, *, author_id: int | None) -> None:
         """Move the counters a write can affect, making every page under them unreachable.
@@ -169,6 +212,8 @@ class ArticleCache:
                 await self._redis.incr(author_generation_key(author_id))
         except CACHE_FAILURES as error:
             self._degrade("incr", error)
+            return
+        self._succeed()
 
     # --- single flight ----------------------------------------------------------------------
 
@@ -186,6 +231,7 @@ class ArticleCache:
         except CACHE_FAILURES as error:
             self._degrade("lock", error)
             return True
+        self._succeed()
         return bool(acquired)
 
     async def release_lock(self, key: str) -> None:
@@ -195,6 +241,8 @@ class ArticleCache:
             await self._redis.delete(lock_key(key))
         except CACHE_FAILURES as error:
             self._degrade("lock", error)
+            return
+        self._succeed()
 
 
 def _as_int(value: Any) -> int:

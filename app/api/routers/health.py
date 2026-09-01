@@ -1,7 +1,13 @@
 """Health endpoints for Kubernetes probes.
 
 ``/health/live``: pure liveness; no dependencies. Also the harness smoke target.
-``/health/ready``: readiness; reflects MySQL + Redis health, 503 when a dependency is down.
+``/health/ready``: readiness; reports MySQL and Redis, and 503 only when MySQL is down.
+
+Readiness answers one question: should this instance keep receiving traffic? Only MySQL
+decides it. ADR-0004 makes the cache an optimization, so an instance with a dead cache serves
+every read from MySQL and belongs in the pool. A probe that failed on Redis would remove every
+replica at once during a cache outage, which turns a slow service into no service. The Redis
+verdict stays in the body, where an operator reads it and a load balancer does not.
 
 Readiness deliberately borrows nothing from the request path. It does not take ``SessionDep``:
 that dependency holds its connection until the end of the request, which would keep a pooled
@@ -85,9 +91,11 @@ async def ready(redis: Annotated[Redis, Depends(get_redis)]) -> JSONResponse:
         "mysql": await _check(_probe_mysql, timeout),
         "redis": await _check(redis.ping, timeout),
     }
-    ok = all(status == "ok" for status in checks.values())
-
+    # Three outcomes, not two: serving fully, serving with less, and not serving.
+    if checks["mysql"] != "ok":
+        return JSONResponse(status_code=503, content={"status": "unready", "checks": checks})
+    degraded = any(status != "ok" for status in checks.values())
     return JSONResponse(
-        status_code=200 if ok else 503,
-        content={"status": "ready" if ok else "degraded", "checks": checks},
+        status_code=200,
+        content={"status": "degraded" if degraded else "ready", "checks": checks},
     )

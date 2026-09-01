@@ -1,6 +1,6 @@
 # SLI / SLO / Error Budget
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-01
 
 
 ## Service Level Indicators (SLIs)
@@ -49,9 +49,19 @@ three limits.
   responses in every scenario. Past the knee the *client* lost 1.9% of iterations at connection
   level, and none of that reaches `http_requests_total` (finding F5 in the
   [bottleneck analysis](../performance/bottleneck-analysis.md)). An availability SLI built on
-  server-side counters cannot see a request the server never accepted. Closing that gap needs a
-  bound in the application that rejects rather than queues, so the loss becomes a 503 the SLI
-  records.
+  server-side counters cannot see a request the server never accepted.
+
+**M7 closed that last gap.** `LoadShedMiddleware` gives the application the bound the paragraph
+above asked for: at `MAX_INFLIGHT_REQUESTS` per instance the next request is refused with a 503
+and a `Retry-After`, before it reaches a router. A refusal is a response, so it counts in
+`http_requests_total` and in `degraded_responses_total{reason="load_shed"}`, and the loss past the
+knee is now something the SLI can see. The ceiling comes from the M6 measurement itself — 450
+req/s at the knee × the 0.2 s read SLO = 90 in flight, by Little's law — so the bound and the
+number it protects share one derivation ([ADR-0012](../architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md)).
+Two consequences for these SLOs. Shed responses are 5xx, so they burn the error budget, which is
+correct: a refused request is a request the service failed to serve. And the error-rate SLI now
+reports saturation instead of missing it, which makes `RequestsShed` a scaling signal rather than
+a repair one.
 
 The latency histogram bucket edges hold up under measurement: with P95 near 10 ms the reading
 falls well inside the lowest buckets, so the 0.2 s and 0.45 s edges matter only when the service

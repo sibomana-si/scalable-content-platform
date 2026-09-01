@@ -1,6 +1,6 @@
 # Configuration Reference
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-31
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-01
 
 Every environment variable: name, purpose, default, required. Mirror in `.env.example`.
 
@@ -28,6 +28,8 @@ Every environment variable: name, purpose, default, required. Mirror in `.env.ex
 | `BREAKER_FAILURE_THRESHOLD` | Consecutive failures that open the circuit. Low enough to stop paying the timeout early, high enough that one slow query is not an outage | `5` | No |
 | `BREAKER_RESET_SECONDS` | Seconds an open circuit fails fast before it admits a probe. Also the `Retry-After` value the caller receives | `10.0` | No |
 | `BREAKER_HALF_OPEN_MAX_CALLS` | Probes admitted while half-open. More than one turns a recovery into a thundering herd against the dependency that just came back | `1` | No |
+| `MAX_INFLIGHT_REQUESTS` | Requests one instance handles at once before it refuses the next with a 503. Derived from the M6 knee by Little's law, not chosen: 450 req/s × the 0.2 s read SLO = 90. Re-derive it for any other machine ([ADR-0012](../architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md)) | `90` | No |
+| `SHED_RETRY_AFTER_SECONDS` | What a shed caller is told to wait, in seconds. Long enough for the burst to drain, short enough that a client does not read it as an outage | `1.0` | No |
 | `READINESS_TIMEOUT_SECONDS` | Per-dependency ceiling for `/health/ready`. Kubernetes' probe `timeoutSeconds` should be ≥ this | `2.0` | No |
 | `REDIS_URL` | Redis connection URL | — | Yes |
 | `REDIS_SOCKET_TIMEOUT` | Per-command socket timeout (seconds). The library default is unbounded, which turns a blackholed Redis into an indefinite wait for every caller | `2.0` | No |

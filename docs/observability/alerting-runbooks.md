@@ -1,6 +1,6 @@
 # Alerting Runbooks
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-14
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-01
 
 One runbook per alert: symptom → likely cause → diagnosis → remediation.
 
@@ -25,7 +25,10 @@ dashboards are for, and appear here only where they are actionable on their own.
 | [TargetDown](#alert-targetdown) | **critical** | `up == 0` for the app job | 2m |
 | [HighCpuSaturation](#alert-highcpusaturation) | warning | CPU > 85% of a core | 15m |
 | [NoTrafficReceived](#alert-notrafficreceived) | info | request rate == 0 | 15m |
-| [Cache Unavailable](#alert-cache-unavailable) | _pending M5_ | Redis errors > threshold | — |
+| [CacheUnavailable](#alert-cacheunavailable) | warning | Redis error rate > 0.1/s | 10m |
+| [CircuitBreakerOpen](#alert-circuitbreakeropen) | **critical** | a breaker reads open | 2m |
+| [ElevatedDegradedResponses](#alert-elevateddegradedresponses) | warning | degraded / total > 1% | 10m |
+| [RequestsShed](#alert-requestsshed) | warning | any request refused at the in-flight ceiling | 5m |
 
 ---
 
@@ -138,18 +141,65 @@ dashboards are for, and appear here only where they are actionable on their own.
   receiving nothing points upstream.
 - **Remediate:** upstream routing; silence this alert in environments where idleness is normal.
 
-## Alert: Cache Unavailable
+## Alert: CacheUnavailable
 
-> **Pending — M5.** No rule is committed yet: `cache_hits_total` / `cache_misses_total` have no
-> emitters until the Redis cache-aside read path lands
-> ([ADR-0004](../architecture/adr/0004-redis-cache-aside.md)). A rule referencing them would never
-> fire, which is worse than no rule; the consistency test would reject it too.
+- **Fires when:** `sum(rate(cache_errors_total[5m])) > 0.1` for **10m**.
+- **Why it matters:** nothing is failing yet. Every read falls through to MySQL, which now
+  carries the whole read load — around ten times its cached rate on the M6 measurement. The
+  user-visible symptom arrives later, as latency, and then as an error rate.
+- **Likely causes:** Redis is down, evicting under `maxmemory`, or reachable but slow enough to
+  hit the command timeout.
+- **Diagnose:** open **Cache (Redis)**. A climbing `cache_errors_total` with a collapsed hit
+  ratio is Redis; a collapsed hit ratio with flat errors is a workload change. Check
+  `/health/ready`: MySQL healthy and Redis failing returns 200 with `status: degraded`, which is
+  the instance telling you it is still serving.
+- **Remediate:** restart or reconnect Redis. Confirm the fallback engaged rather than the
+  requests erroring — the cache is an optimization, never a dependency
+  ([ADR-0004](../architecture/adr/0004-redis-cache-aside.md)).
 
-- **Will fire when:** Redis errors exceed a threshold, or the hit ratio collapses.
-- **Expected behavior:** degrade to the database rather than fail
-  ([resilience](../resilience/fault-tolerance-design.md)). The user-visible symptom is latency, so
-  [HighReadLatencyP95](#alert-highreadlatencyp95) covers the impact in the meantime.
-- **Remediate:** restart/reconnect; verify the fallback engaged rather than the requests erroring.
+## Alert: CircuitBreakerOpen
+
+- **Fires when:** `max by (dependency) (circuit_breaker_state) == 2` for **2m**. Critical.
+- **Why it is a cause and still pages:** every other rule in this file alerts on a symptom. This
+  one names the cause of the 503s that follow, and it is actionable on its own — one dependency
+  is down, and the service is already refusing calls to it.
+- **Likely causes:** MySQL is down, blackholed, or slow enough that the timeout fires on every
+  call. For `redis`, the same, with a smaller blast radius.
+- **Diagnose:** open **Resilience**. Read the state panel for which dependency, then the
+  timeouts panel for whether it is slow or gone. A breaker that opens and closes repeatedly is
+  an intermittent fault, and the transitions panel shows it where the state panel does not.
+- **Remediate:** fix the dependency. Do not restart the app to "reset" the breaker: it probes on
+  its own after `BREAKER_RESET_SECONDS` and closes as soon as one probe succeeds. A
+  restart only removes the evidence.
+
+## Alert: ElevatedDegradedResponses
+
+- **Fires when:** `sum(rate(degraded_responses_total[5m])) / clamp_min(sum(rate(http_requests_total[5m])), 0.0001) > 0.01`
+  for **10m**.
+- **Why it matters:** degradation is deliberate, so a small rate is the system working. A
+  sustained 1% means the design is carrying load the capacity is not.
+- **Diagnose:** split by `reason` on **Resilience → Degraded responses by reason**. Each reason
+  has its own fix: `load_shed` means scale out, `breaker_open` means repair the dependency, and
+  `upstream_timeout` means the dependency is slow rather than gone.
+- **Remediate:** follow the reason. Compare this panel with the API Overview error rate — what
+  appears on both is by design, and what appears only on the error rate is not.
+
+## Alert: RequestsShed
+
+- **Fires when:** `sum(rate(degraded_responses_total{reason="load_shed"}[5m])) > 0` for **5m**.
+- **Why the threshold is zero:** shedding is the last defense, not a normal operating mode. An
+  instance sheds only after it holds `MAX_INFLIGHT_REQUESTS` requests at once, which is derived
+  from the measured knee, so any sustained shedding means capacity ran out.
+- **Why it is not a page:** the callers who still get served keep their latency. That is the
+  trade the ceiling buys, and it holds while you add capacity.
+- **Diagnose:** **Resilience → Requests in flight against the shed ceiling**. In-flight sitting
+  at the ceiling with shedding underneath is genuine saturation. Shedding with in-flight well
+  below the ceiling means one instance is unbalanced, so check the load balancer.
+- **Remediate:** scale out — the app is stateless by design
+  ([ADR-0002](../architecture/adr/0002-modular-monolith.md)). Raise `MAX_INFLIGHT_REQUESTS`
+  only against a new measurement: the default comes from the M6 knee on one machine, and a
+  ceiling above what the instance can serve returns the queueing the ceiling exists to prevent.
+
 
 ---
 
