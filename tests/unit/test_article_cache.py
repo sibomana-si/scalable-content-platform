@@ -14,6 +14,7 @@ from redis.exceptions import RedisError
 from app.cache.article_cache import ArticleCache
 from app.cache.keys import article_key, author_generation_key, generation_key
 from app.observability.metrics import Metrics, build_metrics
+from app.resilience.breaker import BreakerState, CircuitBreaker, get_breaker, reset_breakers
 
 
 class FakeRedis:
@@ -389,3 +390,134 @@ async def test_the_latch_is_per_instance_not_per_process(redis, metrics):
     assert healthy.degraded is False
     await healthy.set_article(42, BODY, ttl_seconds=300)
     assert await healthy.get_article(42) == BODY
+
+
+# --- the cross-request breaker ----------------------------------------------------------------
+#
+# The per-instance latch stops one request from paying four socket timeouts. It cannot stop the
+# next thousand requests from each paying the first one, because it forgets everything when the
+# request ends. `caching-strategy.md` recorded that gap as M7 work; this closes it.
+
+
+def a_breaker(clock=None, **overrides) -> CircuitBreaker:
+    settings = {
+        "failure_threshold": 2,
+        "reset_seconds": 10.0,
+        "half_open_max_calls": 1,
+        **overrides,
+    }
+    return CircuitBreaker("redis", clock=clock or (lambda: 0.0), **settings)
+
+
+async def test_a_failed_command_counts_against_the_shared_breaker(metrics):
+    breaker = a_breaker()
+    cache = ArticleCache(RaisingRedis(), metrics=metrics, breaker=breaker)
+
+    await cache.get_article(42)
+
+    assert breaker.state is BreakerState.CLOSED  # one failure, threshold is two
+
+
+async def test_the_breaker_opens_across_instances(metrics):
+    """One request cannot open a breaker on its own, and it does not need to.
+
+    Each instance latches after its first failure, so the count that opens the circuit is a
+    count of requests. That is the right unit: the question is whether Redis is down, not
+    whether one handler was unlucky.
+    """
+
+    breaker = a_breaker()
+
+    for _ in range(2):
+        await ArticleCache(RaisingRedis(), metrics=metrics, breaker=breaker).get_article(42)
+
+    assert breaker.state is BreakerState.OPEN
+
+
+async def test_an_open_breaker_sends_no_command_at_all(metrics):
+    """The whole point: a fresh instance must not re-probe a dependency known to be down."""
+
+    breaker = a_breaker()
+    for _ in range(2):
+        await ArticleCache(RaisingRedis(), metrics=metrics, breaker=breaker).get_article(42)
+
+    redis = FakeRedis()
+    cache = ArticleCache(redis, metrics=metrics, breaker=breaker)
+
+    assert await cache.get_article(42) is None
+    assert await cache.get_generations(author_id=5) == (0, 0)
+    await cache.set_article(42, BODY, ttl_seconds=300)
+    await cache.invalidate_article(42)
+    await cache.bump_generations(author_id=5)
+
+    assert redis.calls == []
+
+
+async def test_an_open_breaker_still_lets_the_read_proceed(metrics):
+    """Skipping the cache is not failing the request. ADR-0004 holds under the breaker too."""
+
+    breaker = a_breaker()
+    for _ in range(2):
+        await ArticleCache(RaisingRedis(), metrics=metrics, breaker=breaker).get_article(42)
+
+    cache = ArticleCache(FakeRedis(), metrics=metrics, breaker=breaker)
+
+    assert await cache.get_article(42) is None
+    # The single-flight winner is whoever asks, so the loader is never blocked on a lock.
+    assert await cache.acquire_lock("article:42", ttl_seconds=2) is True
+
+
+async def test_a_closed_breaker_still_probes(cache, redis):
+    await cache.get_article(42)
+
+    assert redis.calls == [("get", article_key(42))]
+
+
+async def test_the_breaker_closes_again_once_redis_answers(metrics):
+    now = 0.0
+    breaker = a_breaker(clock=lambda: now)
+    for _ in range(2):
+        await ArticleCache(RaisingRedis(), metrics=metrics, breaker=breaker).get_article(42)
+    assert breaker.state is BreakerState.OPEN
+
+    now = 11.0  # past the reset interval, so the next caller becomes the probe
+    redis = FakeRedis()
+    await ArticleCache(redis, metrics=metrics, breaker=breaker).get_article(42)
+
+    assert redis.calls == [("get", article_key(42))]
+    assert breaker.state is BreakerState.CLOSED
+
+
+async def test_a_failed_probe_reopens_the_circuit(metrics):
+    now = 0.0
+    breaker = a_breaker(clock=lambda: now)
+    for _ in range(2):
+        await ArticleCache(RaisingRedis(), metrics=metrics, breaker=breaker).get_article(42)
+
+    now = 11.0
+    await ArticleCache(RaisingRedis(), metrics=metrics, breaker=breaker).get_article(42)
+
+    assert breaker.state is BreakerState.OPEN
+
+
+async def test_the_default_breaker_is_the_shared_one(metrics):
+    """Per-instance would count to one and forget, which is a breaker that never opens."""
+
+    reset_breakers()
+    try:
+        cache = ArticleCache(FakeRedis(), metrics=metrics)
+        await cache.get_article(42)
+
+        assert cache.breaker is get_breaker("redis")
+    finally:
+        reset_breakers()
+
+
+async def test_a_disabled_cache_never_builds_a_breaker(metrics):
+    """`CACHE_ENABLED=false` must open no connection and read no settings."""
+
+    reset_breakers()
+    cache = ArticleCache(None, metrics=metrics, enabled=False)
+
+    assert await cache.get_article(42) is None
+    assert cache.breaker is None

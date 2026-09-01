@@ -10,7 +10,7 @@ services, runs them and fails loudly if a reachable dependency is misconfigured
 import itertools
 import os
 import socket
-from collections.abc import AsyncGenerator, Awaitable, Callable
+from collections.abc import AsyncGenerator, Awaitable, Callable, Generator
 from datetime import datetime
 from urllib.parse import urlparse
 
@@ -31,6 +31,7 @@ from app.core.security import create_access_token
 from app.db.session import get_engine, get_sessionmaker
 from app.main import create_app
 from app.models import Article, Role, User
+from app.resilience.breaker import reset_breakers
 
 # The chaos harness addresses the injector, not a dependency, so it has no Settings field.
 TOXIPROXY_URL = os.environ.get("TOXIPROXY_URL", "http://localhost:8474")
@@ -167,6 +168,19 @@ async def wipe_cache() -> None:
         pass
     finally:
         await redis.aclose()
+
+
+@pytest.fixture(autouse=True)
+def _reset_breakers() -> Generator[None, None, None]:
+    """Forget every circuit breaker around each test.
+
+    A breaker lives for the life of the process, which is longer than a test. Without this, a
+    test that drives a dependency down leaves the circuit open, and the next test measures the
+    first one instead of itself.
+    """
+    reset_breakers()
+    yield
+    reset_breakers()
 
 
 @pytest_asyncio.fixture(autouse=True)

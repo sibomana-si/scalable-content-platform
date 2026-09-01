@@ -153,3 +153,61 @@ groups:
             arriving, which the error-rate alerts cannot detect because their denominator
             is zero.
           runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-notrafficreceived"
+
+  - name: resilience
+    rules:
+      # The one cause-based page in this file. An open breaker is not a symptom a user feels
+      # directly, but it names the cause of every 503 that follows, and it is actionable on its
+      # own: one dependency is down and the service is already refusing calls to it.
+      - alert: CircuitBreakerOpen
+        expr: max by (dependency) (circuit_breaker_state) == 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Circuit breaker open for {{ $labels.dependency }}"
+          description: >-
+            The breaker has refused every call to this dependency for two minutes. Reads that
+            the cache cannot serve are answering 503. Fix the dependency; the breaker closes
+            itself once a probe succeeds.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-circuitbreakeropen"
+
+      - alert: ElevatedDegradedResponses
+        expr: |
+          sum(rate(degraded_responses_total[5m]))
+            / clamp_min(sum(rate(http_requests_total[5m])), 0.0001) > 0.01
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "More than 1% of requests are degraded"
+          description: >-
+            The service is answering with less than the full behavior — shed, timed out, or
+            refused by a breaker. Degradation is by design, so this does not page; a sustained
+            level means the design is carrying load the capacity is not.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-elevateddegradedresponses"
+
+      - alert: RequestsShed
+        expr: sum(rate(degraded_responses_total{reason="load_shed"}[5m])) > 0
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "An instance is at its in-flight ceiling and shedding requests"
+          description: >-
+            Requests are being refused before they reach a router. The instance is protecting
+            its latency for the callers it can still serve, which is correct, and it is out of
+            capacity, which is not. Scale out.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-requestsshed"
+
+      - alert: CacheUnavailable
+        expr: sum(rate(cache_errors_total[5m])) > 0.1
+        for: 10m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Redis is failing cache operations"
+          description: >-
+            The read path is falling through to MySQL on every request. Nothing is failing yet,
+            and MySQL is now taking the whole read load — roughly ten times its cached rate.
+          runbook_url: "https://github.com/si-sibomana/scalable-content-platform/blob/main/docs/observability/alerting-runbooks.md#alert-cacheunavailable"

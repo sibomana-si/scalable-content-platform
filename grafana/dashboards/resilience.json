@@ -1,21 +1,406 @@
 {
   "uid": "scp-resilience",
   "title": "Resilience",
-  "description": "PENDING — placeholder until the resilience patterns ship in M7. Timeout, retry and circuit-breaker metrics have no emitters yet, so this dashboard is deliberately empty rather than showing panels that would read 'No data' forever.",
-  "tags": ["scalable-content-platform", "resilience", "pending"],
+  "description": "Timeouts, retries, circuit breakers and load shedding. This dashboard answers one question the RED dashboards cannot: is the service degrading on purpose? A 503 from an open breaker and a 503 from a crash look identical on an error-rate graph, and they need opposite responses.",
+  "tags": [
+    "scalable-content-platform",
+    "resilience"
+  ],
   "timezone": "browser",
   "schemaVersion": 39,
-  "version": 1,
-  "time": { "from": "now-6h", "to": "now" },
+  "version": 3,
+  "refresh": "30s",
+  "time": {
+    "from": "now-6h",
+    "to": "now"
+  },
   "panels": [
     {
       "id": 1,
-      "type": "text",
-      "title": "Pending — lands with the resilience patterns (M7)",
-      "gridPos": { "h": 14, "w": 24, "x": 0, "y": 0 },
+      "type": "timeseries",
+      "title": "Circuit breaker state by dependency",
+      "description": "0 closed, 1 half-open, 2 open. Read this first during an incident: an open breaker says the service is refusing calls on purpose, which explains a 503 rate that would otherwise look like a crash.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (dependency) (circuit_breaker_state)",
+          "legendFormat": "{{dependency}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 2,
+          "decimals": 0,
+          "custom": {
+            "lineWidth": 2,
+            "fillOpacity": 15,
+            "showPoints": "never",
+            "lineInterpolation": "stepAfter"
+          },
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              },
+              {
+                "color": "red",
+                "value": 2
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
-        "mode": "markdown",
-        "content": "## Pending (M7)\n\nThis dashboard is provisioned but intentionally has no query panels yet.\n\nTimeouts, retries with backoff and circuit breakers are designed in [fault-tolerance-design](../resilience/fault-tolerance-design.md) and validated by the chaos tests in **M7**. Until those code paths exist there is nothing to count, and a panel querying a metric nobody exports renders `No data` indefinitely — indistinguishable from an outage.\n\n**Planned panels**\n\n| Panel | Signal | Why |\n|---|---|---|\n| Circuit-breaker state by dependency | breaker open/half-open/closed | Shows *why* traffic is being shed before the error rate explains it |\n| Timeouts per dependency | timeout counter | Distinguishes a slow dependency from a failing one |\n| Retry rate and retry success ratio | retry counters | A high retry rate that still succeeds is masking a real problem |\n| Fallback / degraded-response rate | fallback counter | Confirms graceful degradation actually engaged |\n\nUntil then, degradation is visible on the [API Overview](d/scp-api-overview) dashboard as a rise in 5xx and latency.\n"
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Breaker transitions by dependency",
+      "description": "State changes over the window. A breaker that opens and closes repeatedly is a dependency that is intermittently slow, which the state panel alone can hide between scrapes.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 0
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (dependency, to_state) (increase(circuit_breaker_transitions_total[5m]))",
+          "legendFormat": "{{dependency}} → {{to_state}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Timeouts per dependency",
+      "description": "Calls abandoned at their ceiling. This separates slow from gone: a dependency that times out is answering too late, and a dependency behind an open breaker is not answering at all.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (dependency) (rate(dependency_timeouts_total[5m]))",
+          "legendFormat": "{{dependency}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 3,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Retry rate and retry success ratio",
+      "description": "The rate is what retries cost; the ratio is whether they buy anything. A high rate that still succeeds is a real problem being masked — the caller pays the latency twice and nothing else reports it.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 7
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(dependency_retries_total[5m]))",
+          "legendFormat": "{{outcome}}",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "(sum(rate(dependency_retries_total{outcome=\"success\"}[5m])) or vector(0))\n/ clamp_min(sum(rate(dependency_retries_total[5m])), 0.0001)",
+          "legendFormat": "success ratio",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 3,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "success ratio"
+            },
+            "properties": [
+              {
+                "id": "unit",
+                "value": "percentunit"
+              },
+              {
+                "id": "max",
+                "value": 1
+              },
+              {
+                "id": "min",
+                "value": 0
+              }
+            ]
+          }
+        ]
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Degraded responses by reason",
+      "description": "Proof that degradation is deliberate. Each reason has its own fix: load_shed means scale out, breaker_open means repair the dependency, upstream_timeout means it is slow rather than gone. Without this panel every one of them is the same 5xx on the error-rate graph.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 0,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (reason) (rate(degraded_responses_total[5m]))",
+          "legendFormat": "{{reason}}",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "decimals": 3,
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Requests in flight against the shed ceiling",
+      "description": "The saturation signal RED cannot give. The ceiling is MAX_INFLIGHT_REQUESTS per instance, derived from the M6 knee by Little's law; traffic that reaches it is refused with a 503 rather than queued.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 12,
+        "x": 12,
+        "y": 14
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(inflight_requests)",
+          "legendFormat": "in flight",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(degraded_responses_total{reason=\"load_shed\"}[5m]))",
+          "legendFormat": "shed/s",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Degraded responses against total traffic",
+      "description": "How much of the load is being answered with less than the full behavior. Compare with the API Overview error rate: what appears here is by design, and what appears only there is not.",
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "gridPos": {
+        "h": 7,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(rate(degraded_responses_total[5m])) or vector(0)",
+          "legendFormat": "degraded/s",
+          "editorMode": "code",
+          "range": true
+        },
+        {
+          "refId": "B",
+          "expr": "sum(rate(http_requests_total[5m]))",
+          "legendFormat": "requests/s",
+          "editorMode": "code",
+          "range": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ops",
+          "custom": {
+            "lineWidth": 1,
+            "fillOpacity": 8,
+            "showPoints": "never"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "mean",
+            "lastNotNull"
+          ]
+        }
       }
     }
   ]

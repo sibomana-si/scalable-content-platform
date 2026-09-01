@@ -41,11 +41,44 @@ request.
 | `DB_STATEMENT_TIMEOUT_SECONDS` | 2.0 | The server-side kill, sent as `max_execution_time` |
 | `DB_CALL_TIMEOUT_SECONDS` | 3.0 | The whole guarded call, retries included |
 | `REDIS_SOCKET_TIMEOUT` | 2.0 | One cache command, and the whole cache call |
+| `MAX_INFLIGHT_REQUESTS` | 90 | Requests one instance handles at once, before it sheds |
 
 `DB_CALL_TIMEOUT_SECONDS` must exceed `DB_STATEMENT_TIMEOUT_SECONDS`, and `build_policies`
 refuses to start otherwise. Inverted, the client abandons the query first and the connection
 stays pinned to work nobody is waiting for — the exact failure the statement timeout exists to
 prevent.
+
+### The load-shed ceiling
+
+`MAX_INFLIGHT_REQUESTS` is 90 per instance. Past it the instance answers 503 with a
+`Retry-After` instead of accepting the request.
+
+The number is derived, not chosen. The M6 load test measured one replica bending near
+450 req/s, and the read SLO is a P95 under 200 ms. Little's law gives the queue length at
+which that combination stops being possible:
+
+```text
+450 req/s × 0.2 s = 90 requests in flight
+```
+
+Past 90, the instance can still accept work, and every request it accepts breaks the latency
+target for the requests it already holds. Refusing is the honest answer.
+
+**Where the number came from, because it does not travel.** One laptop, an i7-12700H held at
+the `performance` power profile, with the k6 generator pinned to the eight E-cores and the six
+P-cores left to the system under test. The same ceiling on a smaller container sheds traffic
+the instance could have served, and on a larger one it queues past the SLO. Re-derive it from a
+measurement of the target machine, and keep it an environment variable — never a constant.
+
+**Reject, do not queue.** The counter is a plain integer, not a semaphore. A semaphore makes
+the caller wait for a slot, and a waiting request is the thing the ceiling exists to prevent:
+it holds memory, it holds a connection, and it disappoints the caller later instead of now.
+This closes M6 finding F5, where requests past the knee were lost at the connection level, with
+no server-side signal naming the cause.
+
+**Probes and the metrics scrape are exempt.** A shed liveness probe is a restart. A shed
+readiness probe removes an instance that is still serving. A shed scrape is a gap in the data
+over exactly the window that explains the incident.
 
 ### Reads retry. Writes do not.
 
@@ -114,6 +147,10 @@ matching gain.
   the exception itself.
 - The breaker is per process. Three replicas hold three breakers and open them independently, so
   the first replica to notice an outage does not spare the other two their own five failures.
+- **The shed ceiling is per instance and machine-specific.** A default derived on one laptop is
+  wrong on any other machine, in either direction: too low sheds traffic the instance could
+  serve, and too high returns the queueing the ceiling removes. It is configuration that must be
+  re-measured on deployment, and nothing in the code can detect that it was not.
 - `max_execution_time` covers read-only `SELECT` statements. Writes are bounded by the client
   call timeout and by `innodb_lock_wait_timeout`, not by this setting.
 
@@ -126,6 +163,9 @@ matching gain.
 | A timeout per attempt instead of over the call | The caller cannot be promised a number. Three attempts of a three-second call is a nine-second request, whatever the configuration says. |
 | A shared breaker in Redis | The breaker exists to survive a dependency outage. Putting its state in another dependency makes a Redis outage a database outage. |
 | No breaker, timeouts only | Measured in the M7 baseline: every caller pays the full timeout, and the pool stays saturated for as long as the dependency is down. |
+| A semaphore for the shed ceiling | It queues. A caller that waits for a slot holds memory and a connection, and learns it failed later instead of now. |
+| A fixed shed ceiling in code | The right number is a property of the machine, not of the design. Compiled in, it is wrong everywhere except the laptop it was measured on. |
+| Failing readiness when Redis is down | It removes every replica at once during a cache outage, which turns a slower service into no service. The cache is an optimization ([ADR-0004](0004-redis-cache-aside.md)). |
 
 ## Validation
 
@@ -142,3 +182,9 @@ matching gain.
 | A guarded read rolls the transaction back between attempts | `tests/unit/test_guard.py` |
 | The engine carries a connect timeout and `max_execution_time` | `tests/unit/test_db_engine_timeouts.py` |
 | MySQL kills a runaway query and the connection returns to the pool | `tests/integration/test_db_timeout.py` |
+| A request under the ceiling passes, and the next one is shed with a `Retry-After` | `tests/unit/test_load_shed.py` |
+| The in-flight gauge returns to zero, including when the handler raises | `tests/unit/test_load_shed.py` |
+| Probes and the metrics scrape are never shed | `tests/unit/test_load_shed.py` |
+| A timeout answers 504 and an open circuit answers 503, both with `Retry-After` | `tests/unit/test_error_envelope_resilience.py` |
+| A cache hit survives a database outage, and a miss refuses rather than fails | `tests/unit/test_article_service_fallback.py` |
+| A dead cache leaves the instance ready, and a dead database does not | `tests/integration/test_health_ready_degraded.py` |

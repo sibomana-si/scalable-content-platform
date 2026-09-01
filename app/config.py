@@ -100,6 +100,18 @@ class Settings(BaseSettings):
     # against the dependency that just came back.
     breaker_half_open_max_calls: int = 1
 
+    # The per-instance ceiling on requests being handled at once. Past it the instance refuses
+    # work rather than queueing it. Derived from the M6 measurement, not chosen: one replica
+    # bends near 450 req/s, and the read SLO is a P95 under 200 ms, so Little's law gives
+    # 450 * 0.2 = 90 requests in flight as the point past which the SLO cannot be met.
+    # That number came from one laptop held at the `performance` power profile with the load
+    # generator pinned to the E-cores. Re-derive it for any other machine: the same ceiling on
+    # a smaller container sheds traffic the instance could have served.
+    max_inflight_requests: int = 90
+    # What a shed request is told to wait. One second is long enough for the burst that caused
+    # the shed to drain, and short enough that a client does not treat it as an outage.
+    shed_retry_after_seconds: float = 1.0
+
     # --- Health probes ---
     # Per-dependency ceiling for /health/ready. Kubernetes' probe `timeoutSeconds` should be
     # at least this, or the orchestrator gives up while the handler is still working.

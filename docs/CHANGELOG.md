@@ -27,12 +27,43 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   because the degrade latch resets each time. Readiness returns 503 when only Redis is down, which
   pulls a healthy replica out of rotation for a fault ADR-0004 calls a latency event.
 
+- **Graceful fallback: every failure is now an answer a client can act on.** A dependency that
+  times out returns **504 `UPSTREAM_TIMEOUT`**, and one the breaker has given up on returns **503
+  `SERVICE_UNAVAILABLE`**; both carry a `Retry-After`, and neither is a 500. A DB outage with a
+  cache hit still serves the cached body without touching the repository. Two new series,
+  `degraded_responses_total{route,reason}` and `inflight_requests`, separate a deliberate refusal
+  from a crash — a distinction an error-rate graph cannot make and an operator needs, because the
+  two need opposite responses.
+- **Load shedding, at the front door.** `LoadShedMiddleware` refuses the request past
+  `MAX_INFLIGHT_REQUESTS` with a 503 and a `Retry-After`, before it reaches a router, and exempts
+  the probes and the metrics scrape. It rejects rather than queues: a request that waits is the
+  thing the layer exists to prevent. The default of **90** comes from the M6 knee by Little's law
+  — 450 req/s × the 0.2 s read SLO — and it is machine-specific, so the derivation and the machine
+  travel with it in [ADR-0012](architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md).
+  This closes finding F5: past the knee, requests were lost at connection level where no
+  server-side counter could see them. They are now a 503 the SLI records.
+- **The Resilience dashboard and four alerts.** `grafana/dashboards/resilience.json` leaves the
+  pending list with seven panels, and `prometheus/alerts.yml` gains `CircuitBreakerOpen`
+  (critical), `ElevatedDegradedResponses`, `RequestsShed` and the finished `CacheUnavailable`.
+  Each has a runbook in [alerting-runbooks.md](observability/alerting-runbooks.md).
+
 ### Removed
 - `pybreaker` leaves `requirements.txt`. The breaker in `app/resilience/breaker.py` is a state
   machine over an injected clock, which the package's own clock cannot be, and its storage,
   listener and threading model were all cost in a single-threaded event loop (ADR-0012).
 
 ### Changed
+- **A dead cache no longer removes every replica.** `/health/ready` has three outcomes instead of
+  two: 200 `ready`, 200 `degraded` when only Redis is down, and 503 `unready` when MySQL is. Only
+  MySQL decides the status code. ADR-0004 makes the cache an optimization, so failing readiness on
+  Redis turned a slow service into no service — every replica left the pool at once for a fault
+  the read path already survives. The Redis verdict stays in the body, where an operator reads it
+  and a load balancer does not.
+- **The Redis circuit breaker now spans requests.** `ArticleCache` kept a latch that lived for one
+  request, which stopped that request from paying the socket timeout four times but did nothing
+  for the next thousand requests. It now also consults the shared `redis` breaker: one failure per
+  instance, so the count that opens the circuit counts requests, not commands, and an open circuit
+  sends no command at all.
 - **The M6 load test is reported, and all five performance targets pass.** Three replicas held
   **525 req/s for five minutes** at a read P95 of **10.9 ms**, a write P95 of **26.2 ms**, and zero
   errors, so the five 🟥 rows in

@@ -1,6 +1,6 @@
 # Diagrams (source-controlled)
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-01
 
 Diagrams are kept as **code** (Mermaid) so they are diffable and reviewed in PRs. The `.mmd` files in
 this directory are the canonical sources; this page embeds the same Mermaid for rendering in the docs
@@ -129,30 +129,43 @@ graph LR
 
 ## 5. Failure handling (resilience)
 
-The degradation ladder when dependencies misbehave: Redis loss falls through to MySQL; MySQL
-impairment is bounded by timeouts → bounded retries with backoff → circuit breaker → load shedding
-with an explicit `503 + Retry-After`, never a hang or cascade. Policies and budgets in
+The degradation ladder when dependencies misbehave. Load shedding comes first, at the front door,
+because a request the instance cannot serve costs least when it is refused before it is routed.
+Redis loss falls through to MySQL. MySQL impairment is bounded by a timeout, then a bounded retry,
+then a circuit breaker — and each ending is a status a client can act on, never a hang and never a
+500. Policies and budgets in
 [fault-tolerance-design](../../resilience/fault-tolerance-design.md).
 
 ```mermaid
 graph TD
-    req[Request] --> path{Dependency call<br/>with explicit timeout}
+    req[Request] --> gate{In flight below<br/>MAX_INFLIGHT_REQUESTS?}
+    gate -- no --> shed["503 SERVICE_UNAVAILABLE + Retry-After<br/>reason=load_shed<br/>refused before the router runs"]
+    gate -- yes --> cache{Cache read}
 
-    path -- "Redis down / timeout" --> fallthrough[Fall through to MySQL<br/>degraded latency, correct data]
-    fallthrough --> ok1[200 OK]
+    cache -- hit --> ok1[200 OK]
+    cache -- "Redis down / timeout" --> rcb[Redis breaker opens<br/>later callers skip Redis entirely]
+    rcb --> db
+    cache -- miss --> db{"MySQL call<br/>breaker, then timeout, then retry"}
 
-    path -- "MySQL slow / error" --> retry{Retry with backoff + jitter<br/>idempotent reads only}
-    retry -- recovered --> ok2[200 OK]
-    retry -- "failures exceed threshold" --> cb[Circuit breaker OPENS<br/>fail fast, no queue pile-up]
-
-    cb --> shed[Load shedding / fallback<br/>503 + Retry-After<br/>no hanging, no cascade]
-    cb -- "cool-off elapsed" --> half[HALF-OPEN<br/>limited probe requests]
+    db -- answers --> ok2[200 OK<br/>cache is filled]
+    db -- "slower than the call timeout" --> to["504 UPSTREAM_TIMEOUT + Retry-After<br/>reason=upstream_timeout"]
+    db -- "consecutive failures pass the threshold" --> cb[MySQL breaker OPENS<br/>no socket, no wait]
+    cb --> unavail["503 SERVICE_UNAVAILABLE + Retry-After<br/>reason=breaker_open"]
+    cb -- "reset interval elapsed" --> half[HALF-OPEN<br/>one probe]
     half -- "probe succeeds" --> closed[Breaker CLOSES<br/>normal service resumes]
     half -- "probe fails" --> cb
 
-    shed -.-> alert[Alert: error-budget burn<br/>operator + runbook]
+    shed -.-> deg[degraded_responses_total<br/>by route and reason]
+    to -.-> deg
+    unavail -.-> deg
+    deg -.-> alert[Alerts: CircuitBreakerOpen, RequestsShed,<br/>ElevatedDegradedResponses]
+
+    rcb -.-> ready["/health/ready: 200 degraded<br/>the instance keeps serving"]
+    cb -.-> unready["/health/ready: 503 unready<br/>the instance leaves the pool"]
 ```
 
 **Invariants encoded above:** every external call has a timeout (nothing waits forever); retries are
 bounded and backed off (no retry storms); Redis loss is a latency event, never a correctness event;
-MySQL impairment produces fast, explicit errors — not cascading hangs.
+MySQL impairment produces fast, explicit errors — not cascading hangs; a deliberate refusal is a 503
+or a 504 with a `Retry-After`, never a 500; and only MySQL decides readiness, so a dead cache leaves
+the instance in the pool.

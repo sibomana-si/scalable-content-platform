@@ -273,7 +273,9 @@ def test_query_variables_refresh_and_have_an_all_value(name: str, dashboard: dic
 
 
 def test_the_pending_dashboards_declare_why_they_are_empty() -> None:
-    for name in ("resilience.json",):
+    # Empty since M7: the resilience dashboard has real panels, and no dashboard is pending.
+    # The tuple stays so the next placeholder has a home rather than a new test.
+    for name in ():  # type: ignore[var-annotated]
         dashboard = dict(dashboards())[name]
         text = json.dumps(dashboard).lower()
 
@@ -351,7 +353,42 @@ def test_the_error_budget_is_alerted_on_two_burn_rate_windows() -> None:
 def test_the_documented_runbooks_all_have_a_rule() -> None:
     alerted = {rule["alert"] for rule in alert_rules()}
 
-    assert {"HighReadLatencyP95", "ElevatedErrorRate", "TargetDown"} <= alerted
+    assert {
+        "HighReadLatencyP95",
+        "ElevatedErrorRate",
+        "TargetDown",
+        # M7: a service that degrades silently is a service nobody fixes.
+        "CircuitBreakerOpen",
+        "ElevatedDegradedResponses",
+        "RequestsShed",
+        "CacheUnavailable",
+    } <= alerted
+
+
+def test_the_resilience_dashboard_covers_the_four_patterns() -> None:
+    """Can an operator tell a timeout from a refusal from a deliberate refusal?
+
+    Each panel answers a different question, and each question has a different fix. Without
+    all four, a degraded service reads on every other dashboard as latency and 5xx, which is
+    also what a broken service reads as.
+    """
+
+    dashboard = dict(dashboards())["resilience.json"]
+    expressions = " ".join(expr for _, expr in panel_expressions(dashboard))
+
+    assert "circuit_breaker_state" in expressions  # what the breaker is doing now
+    assert "dependency_timeouts_total" in expressions  # slow, rather than gone
+    assert "dependency_retries_total" in expressions  # what the retries cost, and whether they work
+    assert "degraded_responses_total" in expressions  # that degradation engaged, and why
+
+
+def test_the_resilience_dashboard_shows_the_shed_ceiling() -> None:
+    """The saturation signal the load-shed ceiling is compared against."""
+
+    dashboard = dict(dashboards())["resilience.json"]
+    expressions = " ".join(expr for _, expr in panel_expressions(dashboard))
+
+    assert "inflight_requests" in expressions
 
 
 def test_the_database_dashboard_shows_the_connection_pool() -> None:

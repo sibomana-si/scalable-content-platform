@@ -65,6 +65,11 @@ DEPENDENCIES = frozenset({"mysql", "redis", "other"})
 # needed a retry, so the two real values answer one question: did the retry help?
 RETRY_OUTCOMES = frozenset({"success", "exhausted", "other"})
 
+# The only values the ``reason`` label may take. Each names a way the service answered with
+# less than it promised, and each has a different fix: shed load means scale out, an open
+# breaker means fix the dependency, a timeout means it is slow rather than gone.
+DEGRADED_REASONS = frozenset({"load_shed", "breaker_open", "upstream_timeout", "other"})
+
 # The only values the breaker ``to_state`` label may take, and the numbers the gauge reports.
 # Ordered by severity so a graph reads upward: closed is healthy, open is shed.
 BREAKER_STATE_VALUES = {"closed": 0, "half_open": 1, "open": 2}
@@ -130,6 +135,8 @@ class Metrics:
     dependency_retries: Counter
     breaker_state: Gauge
     breaker_transitions: Counter
+    degraded_responses: Counter
+    inflight_requests: Gauge
 
 
 def build_metrics(registry: CollectorRegistry) -> Metrics:
@@ -204,6 +211,21 @@ def build_metrics(registry: CollectorRegistry) -> Metrics:
             "circuit_breaker_transitions_total",
             "Circuit breaker state changes.",
             ["dependency", "to_state"],
+            registry=registry,
+        ),
+        # Proof that degradation is deliberate. Without it a shed request and a crashed one
+        # are the same 5xx on the error-rate panel, and the second is a much worse problem.
+        degraded_responses=Counter(
+            "degraded_responses_total",
+            "Responses served with less than the full behavior, by the reason for it.",
+            ["route", "reason"],
+            registry=registry,
+        ),
+        # The saturation signal the RED metrics cannot give. Latency says requests are slow;
+        # this says how many are in the building, which is what the shed ceiling compares to.
+        inflight_requests=Gauge(
+            "inflight_requests",
+            "Requests being handled right now, excluding probes and the metrics scrape.",
             registry=registry,
         ),
     )
@@ -316,6 +338,21 @@ def observe_breaker_transition(
     metrics.breaker_transitions.labels(
         dependency=dependency_label(dependency), to_state=breaker_state_label(to_state)
     ).inc()
+
+
+def degraded_reason(reason: Any) -> str:
+    """Bucket a degradation reason into the closed label set."""
+    return reason if reason in DEGRADED_REASONS else "other"
+
+
+def observe_degraded_response(route: str, reason: str, *, metrics: Metrics = METRICS) -> None:
+    """Record one response the service chose to degrade rather than fail or hang."""
+    metrics.degraded_responses.labels(route=route, reason=degraded_reason(reason)).inc()
+
+
+def track_inflight(delta: int, *, metrics: Metrics = METRICS) -> None:
+    """Move the in-flight gauge by ``delta``. Every increment needs a matching decrement."""
+    metrics.inflight_requests.inc(delta)
 
 
 def observe_query(statement: Any, duration_seconds: float, *, metrics: Metrics = METRICS) -> None:

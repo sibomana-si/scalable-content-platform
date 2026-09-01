@@ -87,7 +87,7 @@ async def test_ready_holds_no_db_connection_while_it_probes_redis(
     assert spy.checked_out_during_ping == 0
 
 
-async def test_ready_fails_fast_when_a_dependency_hangs(
+async def test_ready_gives_up_on_a_hanging_dependency(
     app: FastAPI, client: AsyncClient, db_available: None, monkeypatch: pytest.MonkeyPatch
 ) -> None:
     monkeypatch.setenv("READINESS_TIMEOUT_SECONDS", "0.2")
@@ -98,7 +98,10 @@ async def test_ready_fails_fast_when_a_dependency_hangs(
     resp = await client.get("/health/ready")
     elapsed = time.perf_counter() - started
 
-    assert resp.status_code == 503
+    # 200, because a dead cache is not a reason to remove an instance that still serves every
+    # read from MySQL — see tests/integration/test_health_ready_degraded.py. What this test
+    # pins is the timeout underneath that verdict.
+    assert resp.status_code == 200
     body = resp.json()
     assert body["status"] == "degraded"
     assert body["checks"]["mysql"] == "ok"
