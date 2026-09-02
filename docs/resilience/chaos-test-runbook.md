@@ -1,6 +1,6 @@
 # Chaos Test Runbook
 
-> **Status:** ✅ Current · **Owner:** Simon Sibomana · **Last updated:** 2026-08-31
+> **Status:** ✅ Current · **Owner:** Simon Sibomana · **Last updated:** 2026-09-02
 
 How to inject a fault into this system and measure what it does. The design under test is
 [fault-tolerance-design.md](fault-tolerance-design.md); the results live in
@@ -92,14 +92,18 @@ before the run ends, and take the closing snapshot.
 | # | Experiment | Fault to inject |
 |---|---|---|
 | 0 | Baseline through the proxy | none |
-| 1 | MySQL slow | `scripts/inject_fault.py --target mysql latency --ms 3000` |
+| 1 | MySQL slow | `scripts/inject_fault.py --target mysql latency --ms 2500` |
 | 2 | Redis unavailable | `scripts/inject_fault.py --target redis blackhole` |
 | 3 | MySQL unreachable | `scripts/inject_fault.py --target mysql blackhole` |
 | 4 | MySQL refusing connections | `scripts/inject_fault.py --target mysql reset_peer` |
 
-Size the latency in experiment 1 against the configured statement timeout in
+Size the latency in experiment 1 against the bounds in
 [configuration-reference.md](../operations/configuration-reference.md), never against a round
-number. A delay under the timeout trips nothing and measures the proxy.
+number. A delay under every timeout trips nothing and measures the proxy. 2,500 ms sits **above**
+the 2.0 s statement timeout and **below** the 3.0 s call timeout, which is the interesting place
+to stand: the delay is on the wire, so the server-side `max_execution_time` never sees a slow
+query and cannot fire. One round trip therefore survives, and a cache-aside read that makes
+several does not. That measures what the call timeout catches when the statement timeout cannot.
 
 Between experiments, clear the fault and let the machine settle:
 

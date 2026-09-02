@@ -1,6 +1,6 @@
 # Non-Functional Requirements (NFR) / SLO
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-02
 
 These are the *measurable* claims the system must back up. Pair with [observability/slo.md](../observability/slo.md).
 
@@ -36,7 +36,7 @@ These are the *measurable* claims the system must back up. Pair with [observabil
 |---|---|
 | Availability (SLO) | **99.9%** ("three nines", ~43 min/month of allowed downtime) |
 | Error rate (SLO) | **< 0.1% 5xx** |
-| Graceful degradation | Reads fall back to MySQL when Redis is down; load-shed / defined fallback when MySQL is impaired — see [resilience](../resilience/fault-tolerance-design.md) |
+| Graceful degradation | **Met.** Redis blackholed: 0 failures, MySQL absorbed 430 qps at a query P95 of 1.54 ms. MySQL blackholed: 50% of reads still served from cache, the rest 503 in 4.8 ms, no 500s. Measured in [chaos-test-report.md](../resilience/chaos-test-report.md); designed in [fault-tolerance-design.md](../resilience/fault-tolerance-design.md) |
 
 > **Error budget = 1 − SLO.** The 99.9% availability SLO and the "< 0.1% 5xx" error rate are the **same budget** expressed two ways (≈43 min/month). When the rolling-window budget is exhausted, freeze risky changes and prioritize reliability (see [observability/slo.md](../observability/slo.md) error-budget policy). 99.9% is the right MVP tier — 99.95%/99.99% require redundancy and automation beyond MVP scope.
 

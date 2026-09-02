@@ -170,7 +170,7 @@ Each assumption above is validated at M6 and the measured value recorded here
 | Per-replica capacity (RPS at P95 < 200 ms) | **≈ 450 req/s** — the knee sits at 444–475 req/s (run B) and 429–464 req/s (run B2), at a P95 of 20–24 ms | ✅ |
 | Cache hit ratio ≥ 90% under the target profile | **89.4%** on articles, **73.5%** blended, under an 80/20 hot set | 🟨 |
 | MySQL load ≈ 55 qps at target hit ratio | **248 qps** normalized to 500 req/s (0.496 queries per request), against 55 predicted | 🟥 |
-| Fall-through survival: MySQL at ~500 qps with Redis disabled | _pending fault-injection test (M7)_ | 🟥 |
+| Fall-through survival: MySQL at ~500 qps with Redis disabled | **Yes.** With Redis blackholed, MySQL took **430 qps** at 368 req/s — **585 qps** normalized to 500 req/s — at a query P95 of **1.54 ms**, below the 1.89 ms it served cached. Zero failures, and request P95 moved from 19.4 ms to 20.1 ms (chaos experiment 2) | 🟩 |
 | Correctness under scale-out (no shared-state ceiling) | `tests/integration/test_horizontal_scaling.py`, `tests/integration/test_multi_replica.py` | 🟩 |
 | Throughput scales with added replicas | **Yes, sub-linearly** — 450 req/s on one replica, 900 req/s on three | 🟨 |
 | Avg payload size 2–8 KB and Redis memory model | **4,912 bytes** mean body, inside the range; Redis holds **2.05 MB** for the whole working set against 120 MB modeled worst case | ✅ |
