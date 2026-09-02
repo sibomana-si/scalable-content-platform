@@ -46,6 +46,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   pending list with seven panels, and `prometheus/alerts.yml` gains `CircuitBreakerOpen`
   (critical), `ElevatedDegradedResponses`, `RequestsShed` and the finished `CacheUnavailable`.
   Each has a runbook in [alerting-runbooks.md](observability/alerting-runbooks.md).
+- **The resilience design is now measured, not asserted.**
+  [chaos-test-report.md](resilience/chaos-test-report.md) records five fault-injection experiments
+  plus a repeat, each with a 5-minute k6 steady run at 350 req/s underneath. Redis blackholed cost
+  **zero failures** and 0.7 ms of P95, with MySQL absorbing 430 qps against 188 cached at a *lower*
+  query P95. MySQL blackholed still served 27,930 reads from cache and refused the rest with a 503
+  at **P95 4.8 ms**, shedding 823 requests at an in-flight peak of 85 against the ceiling of 90 —
+  the first real firing of the load shedder, and the close of M6 finding F5. Every experiment
+  recovered to zero 5xx within 65 seconds on the breaker's own probe. The report carries its noise
+  floor: the degraded share under a latency fault spreads 30 points across two identical runs, so
+  no claim rests on it.
 
 ### Removed
 - `pybreaker` leaves `requirements.txt`. The breaker in `app/resilience/breaker.py` is a state
@@ -341,6 +351,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `cryptography` runtime dependency — required by aiomysql/pymysql for MySQL 8 `caching_sha2_password` authentication.
 
 ### Fixed
+- **A refused MySQL connection answered 500 and never opened the circuit breaker.** Chaos
+  experiment 4 found it: under `reset_peer` the service returned 12,166 × 500, throughput fell from
+  368 to 101 req/s, and `circuit_breaker_state{dependency="mysql"}` stayed at 0, while the same
+  dependency blackholed answered 503 correctly. A refusal fails fast enough to reach a second
+  attempt, and `with_retry` rolls the session back between attempts — which closed the
+  `async with session.begin()` block the request transaction lived in, so every later statement
+  raised `InvalidRequestError`. The retry layer does not call that transient, so nothing translated
+  it, the guard read it as an answer from a working dependency and recorded a breaker *success*,
+  and the catch-all handler answered 500. `get_session` now commits and rolls back explicitly, so
+  the session begins again and the second attempt reaches MySQL. The re-test returned **zero 500s**
+  at P95 4.8 ms with the breaker opening 16 times, and the in-flight peak fell from 52 to 3.
+  Pinned by `tests/integration/test_retry_after_rollback.py`.
 - Read-your-writes violation on every write endpoint: the request transaction committed after
   the response had been sent, so `POST /v1/auth/register` returned 201 for a row an immediately
   following `POST /v1/auth/login` could not yet see (401 in roughly three attempts out of five;

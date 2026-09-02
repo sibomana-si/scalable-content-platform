@@ -1,6 +1,6 @@
 # Threat Model
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-10
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-02
 
 Lightweight [STRIDE](https://en.wikipedia.org/wiki/STRIDE_model) analysis over the trust boundaries from the [C4 diagrams](../architecture/overview.md).
 
@@ -16,7 +16,7 @@ Lightweight [STRIDE](https://en.wikipedia.org/wiki/STRIDE_model) analysis over t
 | **T**ampering | Modified request/body | Articles, roles | Validation, parameterized queries | 🟥 |
 | **R**epudiation | Denying actions | Audit | Structured logs w/ request_id | 🟥 |
 | **I**nfo disclosure | Leaking PII/internals | Users, errors | Error catalog hides internals; TLS | 🟥 |
-| **D**oS | Resource exhaustion | Availability | Rate limiting, timeouts, load shedding | 🟥 |
+| **D**oS | Resource exhaustion | Availability | Timeouts, retries, circuit breakers and load shedding at 90 in flight — exercised in [chaos-test-report.md](../resilience/chaos-test-report.md) | 🟩 |
 | **E**oP | Privilege escalation | Admin ops | RBAC, ownership checks, IDOR tests | 🟥 |
 
 ## Practice Scenarios

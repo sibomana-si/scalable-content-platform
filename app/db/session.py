@@ -49,8 +49,8 @@ def build_engine_kwargs(settings: Settings) -> dict[str, Any]:
             "DB_STATEMENT_TIMEOUT_SECONDS must be positive; MySQL reads max_execution_time=0 "
             "as no limit, so a runaway query keeps its connection until it finishes."
         )
-        # MySQL takes this in milliseconds. Passing seconds would make a 2 s bound a 2 ms bound,
-        # and every SELECT would fail under a name that reads like a success.
+    # MySQL takes this in milliseconds. Passing seconds would make a 2 s bound a 2 ms bound,
+    # and every SELECT would fail under a name that reads like a success.
     statement_timeout_ms = int(settings.db_statement_timeout_seconds * 1000)
     return {
         "pool_size": settings.db_pool_size,
@@ -97,9 +97,19 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
     """
     FastAPI dependency: one AsyncSession, one transaction per request.
 
-    The 'begin()' block commits when the handler returns cleanly and rolls back when
-    anything raises through it (domain errors included; they become responses in the
-    app-level exception handlers after this teardown). Handlers never commit.
+    The commit runs when the handler returns cleanly, and the rollback runs when anything
+    raises through it (domain errors included; they become responses in the app-level
+    exception handlers after this teardown). Handlers never commit.
+
+    Commit and rollback are explicit rather than an ``async with session.begin()`` block.
+    That block refuses every statement issued after a rollback inside it, and ``with_retry``
+    rolls the session back between attempts. So a read whose connection died mid-transaction
+    retried into ``InvalidRequestError``, which the retry layer does not call transient:
+    nothing translated it, the guard read it as an answer from a working dependency,
+    and the API answered 500 while the breaker stayed closed.
+    With the explicit form the session autobegins again, so the second attempt reaches
+    MySQL and a real refusal answers 503. Only reads retry, so no write ever crosses
+    two transactions.
 
     Because the commit is this generator's teardown, callers must declare the dependency
     with ``scope="function"``. FastAPI's default for a dependency with yield is
@@ -114,9 +124,10 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 
     async with get_sessionmaker()() as session:
         try:
-            async with session.begin():
-                yield session
+            yield session
+            await session.commit()
         except BaseException:
+            await session.rollback()
             discard_after_commit(session)
             raise
         await drain_after_commit(session)

@@ -1,6 +1,6 @@
 # Load Test Report
 
-> **Status:** ✅ Complete · **Owner:** Simon Sibomana · **Last updated:** 2026-08-28
+> **Status:** ✅ Complete · **Owner:** Simon Sibomana · **Last updated:** 2026-09-02
 >
 > Executes [load-test-plan.md](load-test-plan.md). The evidence behind each finding is in
 > [bottleneck-analysis.md](bottleneck-analysis.md). Run the matrix again with the
@@ -268,6 +268,7 @@ capacity planning should count replicas and ignore the latency headroom.
   is the service or the shared host needs a run with the generator on a separate machine.
 - **Behavior above the knee.** Every figure past saturation is reproducible only to within about
   99%, so nothing above the knee is quoted here as a result.
-- **Fall-through survival.** Redis was never taken away under load. That is the M7 fault-injection
-  work.
+- **Fall-through survival.** Redis was never taken away under load. M7 did that, and the answer
+  is in [chaos-test-report.md](../resilience/chaos-test-report.md): MySQL absorbed 430 qps with the
+  cache dead, at 368 req/s and zero failures.
 - **A sustained write ceiling.** A 5% write mix never approached one.
