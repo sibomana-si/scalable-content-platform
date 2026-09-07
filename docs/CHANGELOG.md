@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **A repository README.** The GitHub landing page now introduces the system, restates the five
+  measured NFR rows and the two chaos results with links to their reports, draws the container
+  diagram, and maps the documentation. The same change corrects two links that named the wrong
+  GitHub organization.
 - **Timeouts, retries and a circuit breaker on every dependency call.** New `app/resilience/`
   package: the guard composes breaker → timeout → retry around each repository method, so a
   dependency failure now costs a bounded, configured amount of time and then becomes an answer.
@@ -399,4 +403,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   (default 4) because unbounded offload would trade the stall for a memory blow-up at ~64 MiB
   per in-flight hash.
 
-[Unreleased]: https://github.com/si-sibomana/scalable-content-platform/commits/main
+[Unreleased]: https://github.com/sibomana-si/scalable-content-platform/commits/main

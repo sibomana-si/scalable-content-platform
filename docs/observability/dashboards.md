@@ -1,12 +1,12 @@
 # Dashboards Catalog
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-01
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-07
 
 What each Grafana dashboard shows and how to read it.
 
 ## Dashboards
 
-JSON models live in [`grafana/dashboards/`](https://github.com/si-sibomana/scalable-content-platform/tree/main/grafana/dashboards)
+JSON models live in [`grafana/dashboards/`](https://github.com/sibomana-si/scalable-content-platform/tree/main/grafana/dashboards)
 and are provisioned read-only (`allowUiUpdates: false`), so the repo is the source of truth.
 
 | Dashboard | uid | Purpose | Key panels | JSON model | Status |
