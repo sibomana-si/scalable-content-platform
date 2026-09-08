@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **The architecture overview matches the built system.** `docs/architecture/overview.md` now
+  places load shedding in the app, draws nginx and Toxiproxy, names the resilience guard, the
+  after-commit queue and the list projection in the component view, carries a row for ADR-0010,
+  ADR-0011 and ADR-0012, links the five diagrams by what each proves, and adds §6 "What the
+  measurements changed". 
 - **A repository README.** The GitHub landing page now introduces the system, restates the five
   measured NFR rows and the two chaos results with links to their reports, draws the container
   diagram, and maps the documentation. The same change corrects two links that named the wrong
