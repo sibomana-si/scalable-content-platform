@@ -1,6 +1,6 @@
 # Dashboards Catalog
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-07
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-09-09
 
 What each Grafana dashboard shows and how to read it.
 
@@ -95,5 +95,68 @@ To add tracing to the picture, run an OTLP collector and set
 measured but emits no spans ([ADR-0009](../architecture/adr/0009-observability-stack.md)).
 
 ## Screenshots
-_Embed exported PNGs here for the portfolio report (M8). Capture the API Overview dashboard
-under load during M6 so the panels show real traffic rather than an idle service._
+
+Each image below is the provisioned dashboard over a window of real traffic, read back from the
+Prometheus series that the chaos runs of 2026-08-29 left behind. `scripts/capture_dashboards.sh`
+drives headless Chrome against the kiosk URL of each dashboard, trims the empty canvas, and
+writes the PNG to `images/`. Run it with the window you want:
+
+```bash
+docker compose --profile observability up -d
+scripts/capture_dashboards.sh 2026-08-29T19:56:33+02:00 2026-08-29T20:01:35+02:00 scp-api-overview
+```
+
+The first three dashboards show experiment 0 of the
+[chaos report](../resilience/chaos-test-report.md): a 5-minute steady run through the proxy with
+no fault, one replica, 367.6 req/s held. The Resilience dashboard shows experiment 4c, the
+re-test of a MySQL `reset_peer` fault after the fix in finding F1. The code under test shipped in
+the resilience commits of 2026-08-31 to 2026-09-02; the images were captured on 2026-09-03 at
+commit `20501be`.
+
+### API Overview
+
+![API Overview dashboard over the steady run of 2026-08-29](images/api-overview.png)
+
+Window 2026-08-29 19:56:33 to 20:01:35 +02:00, experiment 0, one replica, 367.6 req/s held
+through Toxiproxy; captured 2026-09-03 at commit `20501be`.
+
+What to read here: the four stat panels answer the SLO question in one glance, 100% availability,
+a 9.1 ms read P95 and 0% of the error budget spent. The by-route panels show that the article
+detail route carries most of the traffic, and that the two auth routes sit at a steady 50 and
+73 ms P95 because each one hashes a password.
+
+### Database
+
+![Database dashboard over the steady run of 2026-08-29](images/database.png)
+
+Window 2026-08-29 19:56:33 to 20:01:35 +02:00, experiment 0, one replica, 367.6 req/s held
+through Toxiproxy; captured 2026-09-03 at commit `20501be`.
+
+What to read here: statements per request is the panel that says whether the cache works, and it
+reads 0.50 because most reads never reach MySQL. The pool panels show at most 3 of 10 connections
+in use, a 30% peak, which is the headroom the capacity model predicted for one replica.
+
+### Cache
+
+![Cache dashboard over the steady run of 2026-08-29](images/cache.png)
+
+Window 2026-08-29 19:56:33 to 20:01:35 +02:00, experiment 0, one replica, 367.6 req/s held
+through Toxiproxy; captured 2026-09-03 at commit `20501be`.
+
+What to read here: the overall hit ratio is 71.5%, and the panel by `entity` explains it. The
+article cache hits 86% of the time and the list cache 9%, which is finding F3 of the
+[bottleneck analysis](../performance/bottleneck-analysis.md). Degraded operations stay at zero,
+which is what a healthy Redis looks like.
+
+### Resilience
+
+![Resilience dashboard over experiment 4c of 2026-08-29](images/resilience.png)
+
+Window 2026-08-29 20:47:33 to 20:52:38 +02:00, experiment 4c, MySQL `reset_peer` through
+Toxiproxy, one replica, 350 req/s held; captured 2026-09-03 at commit `20501be`.
+
+What to read here: the breaker state for MySQL sits at 2 (open) for the length of the fault while
+the Redis breaker stays closed, and the transitions panel counts each half-open probe that failed.
+Degraded responses by reason show `breaker_open` climbing to 66 per second as the cache empties,
+and the in-flight panel never rises above 4 against a ceiling of 90, which is the proof that a
+refused connection no longer queues callers.

@@ -31,6 +31,12 @@ Under fault, from the [chaos test report](docs/resilience/chaos-test-report.md):
   from cache. The rest answer 503 with a `Retry-After` in under 5 ms, and the service recovers on
   its own within 65 s of the fault clearing.
 
+![API Overview dashboard during a 5-minute steady run](docs/observability/images/api-overview.png)
+
+The API Overview dashboard during the steady run of 2026-08-29, one replica at 367.6 req/s. The
+[dashboards catalog](docs/observability/dashboards.md) shows all four dashboards, with what to
+read on each.
+
 ## Architecture at a glance
 
 ```mermaid

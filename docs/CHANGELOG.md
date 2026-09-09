@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **Dashboard screenshots under real traffic.** `scripts/capture_dashboards.sh` drives headless
+  Chrome against the kiosk URL of each provisioned dashboard for a stated window and writes the
+  PNG to `docs/observability/images/`. The catalog now shows the four dashboards over the chaos
+  runs of 2026-08-29, each with its window, commit and what to read, and the README carries the
+  API Overview. `tests/unit/test_dashboards.py` fails when a dashboard in the catalog has no
+  screenshot, a screenshot is not a PNG under 1 MB, or a caption lacks its date and commit.
 - **The architecture overview matches the built system.** `docs/architecture/overview.md` now
   places load shedding in the app, draws nginx and Toxiproxy, names the resilience guard, the
   after-commit queue and the list projection in the component view, carries a row for ADR-0010,
