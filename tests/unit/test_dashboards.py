@@ -464,3 +464,58 @@ def test_prometheus_accepts_the_load_generator_remote_write() -> None:
     command = compose["services"]["prometheus"]["command"]
 
     assert any("--web.enable-remote-write-receiver" in flag for flag in command)
+
+
+# --- the catalog shows each dashboard under real traffic ------------------------------------------
+
+DASHBOARDS_DOC = REPO_ROOT / "docs" / "observability" / "dashboards.md"
+IMAGES = REPO_ROOT / "docs" / "observability" / "images"
+PNG_MAGIC = b"\x89PNG\r\n\x1a\n"
+IMAGE_LINK = re.compile(r"!\[[^\]]*\]\((images/[^)\s]+\.png)\)")
+
+
+def catalog_uids() -> list[str]:
+    """The uids in the catalog table, in the order the table lists them."""
+
+    uids = []
+    for line in DASHBOARDS_DOC.read_text().splitlines():
+        cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
+        if len(cells) >= 6 and cells[1].startswith("`scp-"):
+            uids.append(cells[1].strip("`"))
+    return uids
+
+
+def screenshot_section() -> str:
+    text = DASHBOARDS_DOC.read_text()
+    start = text.index("## Screenshots")
+    return text[start:]
+
+
+def test_the_screenshot_placeholder_is_gone() -> None:
+    """The M8 placeholder marked the section as unfinished. It must not ship in the report."""
+
+    assert "_Embed exported PNGs here" not in screenshot_section()
+
+
+@pytest.mark.parametrize("uid", catalog_uids())
+def test_every_dashboard_in_the_catalog_has_a_screenshot(uid: str) -> None:
+    name = uid.removeprefix("scp-")
+    assert f"images/{name}.png" in screenshot_section(), f"no screenshot for {uid}"
+
+
+@pytest.mark.parametrize("image", IMAGE_LINK.findall(screenshot_section()))
+def test_every_referenced_screenshot_is_a_small_png(image: str) -> None:
+    path = DASHBOARDS_DOC.parent / image
+    assert path.is_file(), f"{image} is referenced but missing"
+    assert path.read_bytes()[:8] == PNG_MAGIC, f"{image} is not a PNG"
+    assert path.stat().st_size < 1_000_000, f"{image} is over 1 MB"
+
+
+def test_every_screenshot_states_its_window() -> None:
+    """A dashboard with no stated window is a picture, not evidence."""
+
+    body = screenshot_section()
+    for image in IMAGE_LINK.findall(body):
+        after = body[body.index(image) :]
+        caption = after.split("\n\n", 2)[1] if "\n\n" in after else ""
+        assert "2026-" in caption and "commit" in caption, f"{image} has no dated caption"
