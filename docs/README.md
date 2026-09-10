@@ -15,6 +15,7 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Architecture Decision Records](architecture/adr/0001-record-architecture-decisions.md) — 🟩
 - [Diagrams (source-controlled)](architecture/diagrams/README.md) — 🟩
 - [Trade-off Analysis](architecture/trade-off-analysis.md) — 🟩
+- [System Design Narrative](architecture/system-design-narrative.md) — 🟩
 - [Capacity & Scaling Model](architecture/capacity-scaling-model.md) — 🟩
 
 ## API
@@ -47,19 +48,19 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Configuration Reference](operations/configuration-reference.md) — 🟩
 
 ## Performance
-- [Load Test Plan](performance/load-test-plan.md) — ✅
-- [Load Test Runbook](performance/load-test-runbook.md) — ✅
-- [Bottleneck Analysis](performance/bottleneck-analysis.md) — ✅
-- [Load Test Report](performance/load-test-report.md) — ✅
+- [Load Test Plan](performance/load-test-plan.md) — 🟩
+- [Load Test Runbook](performance/load-test-runbook.md) — 🟩
+- [Bottleneck Analysis](performance/bottleneck-analysis.md) — 🟩
+- [Load Test Report](performance/load-test-report.md) — 🟩
 
 ## Resilience
 - [Fault Tolerance Design](resilience/fault-tolerance-design.md) — 🟩
-- [Chaos Test Runbook](resilience/chaos-test-runbook.md) — ✅
-- [Chaos / Failure-Injection Report](resilience/chaos-test-report.md) — ✅
+- [Chaos Test Runbook](resilience/chaos-test-runbook.md) — 🟩
+- [Chaos / Failure-Injection Report](resilience/chaos-test-report.md) — 🟩
 
 ## Development
 - [Testing Strategy & TDD Guide](development/testing-strategy.md) — 🟩
 - [Changelog](CHANGELOG.md) — 🟩
 
 ## Reports
-- [Weekly Deliverables](reports/README.md) — 🟨
+- [Weekly Deliverables](reports/README.md) — 🟩

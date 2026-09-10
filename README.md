@@ -63,8 +63,10 @@ A read is served in this order:
 Writes commit to MySQL first. The cache invalidation runs after the commit, so a reader can never
 cache a row that the transaction later rolls back.
 
-Read the structure in the [architecture overview](docs/architecture/overview.md) and the five
-required diagrams in the [diagram inventory](docs/architecture/diagrams/README.md).
+Read the structure in the [architecture overview](docs/architecture/overview.md), the five
+required diagrams in the [diagram inventory](docs/architecture/diagrams/README.md), and the
+argument from requirement to measurement in the
+[system design narrative](docs/architecture/system-design-narrative.md).
 
 ## Run it
 
@@ -106,12 +108,14 @@ harness, and the rule to stop services by name and never run `docker compose dow
 
 ## Documentation map
 
-Open these three first:
+Open these four first:
 
-1. [Architecture overview](docs/architecture/overview.md) — the C4 views and the component table.
-2. [Load-test report](docs/performance/load-test-report.md) — the method, the numbers and the
+1. [System design narrative](docs/architecture/system-design-narrative.md) — the story from
+   requirement to measurement in one read.
+2. [Architecture overview](docs/architecture/overview.md) — the C4 views and the component table.
+3. [Load-test report](docs/performance/load-test-report.md) — the method, the numbers and the
    noise floor.
-3. [Chaos test report](docs/resilience/chaos-test-report.md) — five faults, what each cost, and
+4. [Chaos test report](docs/resilience/chaos-test-report.md) — five faults, what each cost, and
    the defect they found.
 
 The full site index is [docs/README.md](docs/README.md). The

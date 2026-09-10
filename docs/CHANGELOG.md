@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **The system design narrative tells the system implementation story.**
+  `docs/architecture/system-design-narrative.md` tells the story from requirement to measurement:
+  the problem, the five bets and their costs, what the build found, what the numbers say with
+  their two caveats, and what is next. 
 - **Dashboard screenshots under real traffic.** `scripts/capture_dashboards.sh` drives headless
   Chrome against the kiosk URL of each provisioned dashboard for a stated window and writes the
   PNG to `docs/observability/images/`. The catalog now shows the four dashboards over the chaos

@@ -52,6 +52,7 @@ nav:
   - Architecture:
       - Overview (C4): architecture/overview.md
       - Trade-off Analysis: architecture/trade-off-analysis.md
+      - System Design Narrative: architecture/system-design-narrative.md
       - Capacity & Scaling: architecture/capacity-scaling-model.md
       - Diagrams: architecture/diagrams/README.md
       - ADRs:
