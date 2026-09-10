@@ -1,6 +1,6 @@
 # Weekly Deliverables
 
-> **Status:** 🟨 In progress · Tracks the 8-week schedule from `project_overview.txt`.
+> **Status:** 🟩 Complete
 
 | Week | Theme | Deliverable | Docs produced | Status |
 |---|---|---|---|---|
@@ -11,7 +11,7 @@
 | 5 | Scalability & Caching | Measurable perf improvements | [Caching](../data/caching-strategy.md), [capacity model](../architecture/capacity-scaling-model.md), [ADR-0010](../architecture/adr/0010-generation-counter-list-invalidation.md) | 🟩 |
 | 6 | Load Testing | Load test report w/ graphs | [Plan](../performance/load-test-plan.md), [runbook](../performance/load-test-runbook.md), [bottleneck analysis](../performance/bottleneck-analysis.md), [report](../performance/load-test-report.md), [ADR-0011](../architecture/adr/0011-k6-for-load-testing.md) | 🟩 |
 | 7 | Fault Injection | Resilient system under failure | [Fault tolerance](../resilience/fault-tolerance-design.md), [chaos runbook](../resilience/chaos-test-runbook.md), [chaos report](../resilience/chaos-test-report.md), [ADR-0012](../architecture/adr/0012-timeout-retry-and-circuit-breaker-policy.md), [alerting](../observability/alerting-runbooks.md) | 🟩 |
-| 8 | Polish & Resume | Portfolio-ready backend | Final README, architecture narrative, perf tuning log, [deployment](../operations/deployment.md) | 🟥 |
+| 8 | Polish | Portfolio-ready backend | Root README, [system design narrative](../architecture/system-design-narrative.md), [overview refresh](../architecture/overview.md) with its "what the measurements changed" log, [dashboard screenshots](../observability/dashboards.md) | 🟩 |
 
 From Week 2 onward, each functional deliverable is evidenced by its **green FR acceptance suite** in CI
 (e.g. Week 2's content APIs = FR-004/FR-005 tests passing) — see the
@@ -84,3 +84,12 @@ Add a dated entry below per week summarizing what was completed, metrics capture
   breaker, because the retry's rollback closed the request transaction. Fixed in
   `app/db/session.py` and re-tested. Redis blackholed cost zero failures and 0.7 ms of P95; MySQL
   blackholed still served half the read traffic from cache and refused the rest in under 5 ms.
+- 2026-09-03 — Week 8 — Polish delivered: a root `README.md` that restates the five
+  measured performance rows from the NFR with their evidence links, one Mermaid container diagram
+  and the API Overview screenshot; the [architecture overview](../architecture/overview.md)
+  refreshed to the built system, with a new §6 on what the measurements changed; four Grafana
+  screenshots captured over the retained 2026-08-29 chaos series by `scripts/capture_dashboards.sh`
+  and placed in the [dashboards catalog](../observability/dashboards.md); and the
+  [system design narrative](../architecture/system-design-narrative.md) that tells the story
+  from requirement to measurement. Open gaps stay named in the narrative:
+  no Kubernetes manifests, four pages in progress, one-host measurements.
