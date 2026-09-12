@@ -1,12 +1,14 @@
 # Scalable Content Platform
 
 [![CI](https://github.com/sibomana-si/scalable-content-platform/actions/workflows/ci.yml/badge.svg)](https://github.com/sibomana-si/scalable-content-platform/actions/workflows/ci.yml)
+[![Docs](https://github.com/sibomana-si/scalable-content-platform/actions/workflows/deploy-docs.yml/badge.svg)](https://github.com/sibomana-si/scalable-content-platform/actions/workflows/deploy-docs.yml)
 
 A read-heavy content API built to be measured. The service is FastAPI on Python with MySQL as
 the single source of truth, Redis as a cache-aside layer, and Prometheus, Grafana and
 OpenTelemetry for the signals. Docker Compose runs the stack, the load generator and the fault
 injector. Three stateless replicas hold 525 req/s at a 10.9 ms read P95 with zero
-errors, and every dependency failure becomes a status code instead of a hang.
+errors, and every dependency failure becomes a status code instead of a hang. The
+[documentation site](https://sibomana-si.github.io/scalable-content-platform/) publishes the `docs/` tree.
 
 ## Measured, not claimed
 
@@ -118,7 +120,8 @@ Open these four first:
 4. [Chaos test report](docs/resilience/chaos-test-report.md) — five faults, what each cost, and
    the defect they found.
 
-The full site index is [docs/README.md](docs/README.md). The
+The full site index is [docs/README.md](docs/README.md), published at
+<https://sibomana-si.github.io/scalable-content-platform/>. The
 [trade-off analysis](docs/architecture/trade-off-analysis.md) and the
 [capacity model](docs/architecture/capacity-scaling-model.md) explain the decisions.
 
