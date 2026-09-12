@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **The docs site is published to GitHub Pages.** `.github/workflows/deploy-docs.yml` builds
+  the site with `mkdocs build --strict` and deploys it to
+  <https://sibomana-si.github.io/scalable-content-platform/> on every push to `main` that changes
+  `docs/` or `mkdocs.yml`. `mkdocs.yml` sets `site_url`, `repo_url` and `edit_uri`.
 - **The system design narrative tells the system implementation story.**
   `docs/architecture/system-design-narrative.md` tells the story from requirement to measurement:
   the problem, the five bets and their costs, what the build found, what the numbers say with

@@ -75,4 +75,4 @@ These match what CI (`.github/workflows/ci.yml`) enforces:
   JavaScript, not `pytest`, so they never run in CI.
 
 ## Documentation
-The root [README](README.md) is the entry point for a new reader; keep its figures in step with the documents they cite. Docs live in `docs/` and are reviewed in PRs (docs-as-code). Update relevant docs alongside code changes, and the [CHANGELOG](docs/CHANGELOG.md) under `[Unreleased]`.
+The root [README](README.md) is the entry point for a new reader; keep its figures in step with the documents they cite. Docs live in `docs/` and are reviewed in PRs (docs-as-code). Update relevant docs alongside code changes, and the [CHANGELOG](docs/CHANGELOG.md) under `[Unreleased]`. The site publishes to <https://sibomana-si.github.io/scalable-content-platform/> on every push to `main` that changes `docs/` or `mkdocs.yml`; `mkdocs build --strict` in CI gates the same content on every PR.

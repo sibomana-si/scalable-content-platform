@@ -1,6 +1,9 @@
 site_name: Scalable Content Platform Backend
 site_description: Documentation for a production-oriented, read-heavy FastAPI content platform.
 docs_dir: docs
+site_url: https://sibomana-si.github.io/scalable-content-platform/
+repo_url: https://github.com/sibomana-si/scalable-content-platform
+edit_uri: edit/main/docs/
 
 theme:
   name: material
