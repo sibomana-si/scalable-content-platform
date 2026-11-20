@@ -8,7 +8,7 @@ fastapi>=0.139            # >=0.139: Depends(scope="function"), which the transa
 uvicorn[standard]>=0.30        # ASGI server; standard extra = uvloop + httptools
 
 # --- Data: MySQL (async app driver, sync migrations driver) + Redis ---
-sqlalchemy[asyncio]>=2.0       # 2.x async ORM/core
+sqlalchemy[asyncio]>=2.0,<2.1       # 2.x async ORM/core. opentelemetry-instrumentation-sqlalchemy requires <2.1
 aiomysql>=0.2                  # async app driver  -> mysql+aiomysql://
 pymysql>=1.1                   # sync driver for Alembic migrations -> mysql+pymysql:// 
 cryptography>=42.0             # required by aiomysql/pymysql for MySQL 8 caching_sha2_password auth

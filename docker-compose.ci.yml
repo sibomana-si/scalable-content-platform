@@ -1,0 +1,14 @@
+# CI-only override for the `scale` job in .github/workflows/ci.yml. It adds a GitHub Actions
+# layer cache to the app build and changes nothing else, so a laptop build stays the same.
+#
+# The job selects it with COMPOSE_FILE=docker-compose.yml:docker-compose.ci.yml. The gha cache
+# needs a buildx builder and the Actions runtime token, which the job sets up before the build.
+services:
+  app:
+    build:
+      cache_from:
+        - type=gha,scope=scale-app
+      # ignore-error: a cache that cannot be written costs the next run time, not this result.
+      cache_to:
+        - type=gha,mode=max,scope=scale-app,ignore-error=true
+        
