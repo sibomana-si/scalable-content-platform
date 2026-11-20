@@ -23,7 +23,7 @@ These are the *measurable* claims the system must back up. Pair with [observabil
 > headroom. Raising the budget is a capacity decision, not a measurement — the knee moves with
 > replica count, and this host has spare room only up to about 900 req/s.
 >
-> **Measured on 2026-08-22, commit `3ee0bc8`** — read the numbers with the environment they came
+> **Measured on 2026-08-22** — read the numbers with the environment they came
 > from. Full method, machine state, and caveats in
 > [load-test-report.md](../performance/load-test-report.md); bottlenecks in
 > [bottleneck-analysis.md](../performance/bottleneck-analysis.md). One laptop ran the service and

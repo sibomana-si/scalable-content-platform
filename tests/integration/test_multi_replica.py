@@ -9,7 +9,7 @@ Run it locally::
     docker compose --profile scale up -d --build --scale app=3
     pytest -m scale
 
-CI does not build the image, so these skip there.
+CI runs these in the ``scale`` job, which builds the image and fails on any skip.
 """
 
 import asyncio

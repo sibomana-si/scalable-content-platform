@@ -75,7 +75,7 @@ there is one set of tests, not a "CI suite" and a "local suite."
 | _(none)_ | Nothing. Unit and smoke tests. | Yes |
 | `integration` | MySQL and Redis, via `docker compose up -d` | Yes |
 | `chaos` | Toxiproxy, via `docker compose --profile chaos up -d` | **No** |
-| `scale` | The app image and the compose scale profile | **No** |
+| `scale` | The app image and the compose scale profile | **Yes, in the `scale` job** |
 
 Both marked suites skip on **port reachability**, not on a failed query: a local `pytest` with
 no stack skips, while CI, which provisions the services, runs them and fails loudly if a
@@ -88,10 +88,12 @@ pytest -m chaos           # needs docker compose --profile chaos up -d
 pytest -m scale           # needs docker compose --profile scale up -d --build --scale app=3
 ```
 
-`scale` is excluded from CI because CI does not build the application image. Adding that build
-is deployment work (M8). Until then the in-process statelessness suite
-(`tests/integration/test_horizontal_scaling.py`) is what guards scale-out on every push, and
-`tests/integration/test_multi_replica.py` is the local confirmation across real containers.
+`scale` runs in its own CI job, `scale` in `.github/workflows/ci.yml`. The job builds the
+application image with the documented compose command, starts three replicas behind nginx, and
+runs `pytest -m scale`. A skipped `scale` test fails the job, because a skip there means the
+stack did not come up or nginx did not spread the load. The in-process statelessness suite
+(`tests/integration/test_horizontal_scaling.py`) stays the fast guard in the `test` job, and
+`tests/integration/test_multi_replica.py` is the confirmation across real containers.
 
 ### Load tests
 
