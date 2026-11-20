@@ -84,6 +84,73 @@ jobs:
         # in pyproject.toml, so this --cov=app run gates automatically (no CLI flag needed).
         run: pytest --maxfail=1 -q --cov=app --cov-report=term
 
+  # Builds the application image and runs the `scale` suite against three replicas behind
+  # nginx. The `test` job above cannot do this: it runs the app in-process, so an image that
+  # does not start or a balancer that pins one replica passes there unseen.
+  scale:
+    name: Scale-out (image + 3 replicas)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      # The runner reaches the compose stack on its published ports. These values match
+      # docker-compose.yml, not the `test` job's service containers.
+      MYSQL_HOST: 127.0.0.1
+      MYSQL_PORT: "3307"
+      MYSQL_DB: content_platform
+      MYSQL_USER: app
+      MYSQL_PASSWORD: app
+      REDIS_URL: redis://localhost:6379/0
+      # Only lets the pytest process load its settings. The replicas sign with the compose
+      # value, and the test gets its token through the balancer, so the two need not match.
+      JWT_SECRET: ci-scale-runner-secret-not-for-production
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+      - name: Start MySQL and Redis
+        run: docker compose up -d --wait mysql redis
+      - name: Apply migrations
+        # Migrations do not run at container start, so the runner applies them once.
+        run: alembic upgrade head
+      # The layer cache. A cold build compiles wheels and installs build-essential, and the
+      # cache lets an unchanged requirements set skip both.
+      - uses: docker/setup-buildx-action@v3
+      - name: Expose the Actions runtime to the gha cache
+        uses: crazy-max/ghaction-github-runtime@v3
+      - name: Build the image and start three replicas behind nginx
+        # The documented local command, so CI and a laptop build the image the same way. The
+        # CI override adds only the layer cache. --wait blocks on the image HEALTHCHECK and
+        # the nginx healthcheck.
+        env:
+          COMPOSE_FILE: docker-compose.yml:docker-compose.ci.yml
+        run: docker compose --profile scale up -d --build --wait --scale app=3
+      - name: Run the scale suite
+        run: pytest -m scale -q -rs --junitxml=scale-results.xml
+      - name: Fail on any skipped scale test
+        # A skip here means the stack did not come up or nginx did not spread the load. Both
+        # are the bugs this job exists to catch, so a skip fails the job.
+        run: |
+          python - <<'EOF'
+          import sys
+          import xml.etree.ElementTree as ET
+          
+          root = ET.parse("scale-results.xml").getroot()
+          suites = [root] if root.tag == "testsuite" else list(root)
+          tests = sum(int(s.get("tests", 0)) for s in suites)
+          skipped = sum(int(s.get("skipped", 0)) for s in suites)
+          print(f"scale: {tests} collected, {skipped} skipped")
+          sys.exit(1 if tests == 0 or skipped else 0)
+          EOF
+      - name: Show container logs
+        if: failure()
+        run: docker compose --profile scale logs --no-color app nginx mysql redis
+
   docs-build:
     name: Docs build
     runs-on: ubuntu-latest
