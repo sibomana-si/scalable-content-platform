@@ -1,6 +1,6 @@
 # API Reference / Usage Guide
 
-> **Status:** 🟩 Current for the shipped `/v1/articles` and `/v1/auth` APIs · Authoritative schema lives in [openapi.md](openapi.md).
+> **Status:** 🟩 Current for the shipped `/v1/articles` and `/v1/auth` APIs · The authoritative schema is the committed [`openapi.json`](openapi.json), described in [openapi.md](openapi.md).
 
 ## Base URL & Versioning
 - Base: `/v1`
