@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **CI builds the application image and runs the `scale` suite.** A new `scale` job in
+  `.github/workflows/ci.yml` builds the image with
+  `docker compose --profile scale up -d --build --wait --scale app=3`, applies the migrations,
+  and runs `pytest -m scale` against three replicas behind nginx. A skipped `scale` test fails
+  the job. `docker-compose.ci.yml` adds a GitHub Actions layer cache to the CI build only. Before
+  this change the suite skipped on every push, so an image that did not start or
+  a balancer that pinned one replica passed CI unseen.
 - **The docs site is published to GitHub Pages.** `.github/workflows/deploy-docs.yml` builds
   the site with `mkdocs build --strict` and deploys it to
   <https://sibomana-si.github.io/scalable-content-platform/> on every push to `main` that changes

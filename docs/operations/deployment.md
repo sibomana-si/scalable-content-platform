@@ -89,8 +89,8 @@ never stale on another replica, a JWT minted by one is accepted by all, and the 
 actually spreads the load. See
 [capacity-scaling-model](../architecture/capacity-scaling-model.md) for the replica ceiling.
 
-CI does not build the image, so `-m scale` skips there. Adding an image build to CI is
-deployment work (M8).
+CI runs this suite in the `scale` job of `.github/workflows/ci.yml`. The job builds the image,
+starts three replicas behind nginx, and fails when any `scale` test skips.
 
 ## Kubernetes
 - Manifests/Helm chart location: _TBD_

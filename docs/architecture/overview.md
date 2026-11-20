@@ -45,8 +45,8 @@ boundary (JWT) and an authorization boundary (RBAC) — see [security/authn-auth
 Deployable and runtime units, and how they communicate. The brief's "Auth Service / Content Service"
 are **modules of one stateless FastAPI deployable**, not separate services (§4,
 [ADR-0002](adr/0002-modular-monolith.md)). Docker Compose runs the units today; the `scale`
-profile adds nginx and N replicas, the `chaos` profile adds Toxiproxy. Kubernetes is the target
-described in [operations/deployment.md](../operations/deployment.md) and is not yet proven.
+profile adds nginx and N replicas, the `chaos` profile adds Toxiproxy. Kubernetes,
+described in [operations/deployment.md](../operations/deployment.md), is targeted for future deployment.
 
 ```mermaid
 graph TD
@@ -149,7 +149,7 @@ graph TD
 ## 4. Key Architectural Choices
 
 > **Note on terminology:** the project brief describes Auth/Content as "services," but the
-> deployable unit is a single stateless FastAPI app. The honest name is a **modular monolith with
+> deployable unit is a single stateless FastAPI app. This is a **modular monolith with
 > clear service boundaries**: the module seams (auth vs. content) are the future split lines if
 > scale ever demands it. Rationale in [ADR-0002](adr/0002-modular-monolith.md).
 

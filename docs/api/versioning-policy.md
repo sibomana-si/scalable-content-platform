@@ -1,6 +1,6 @@
 # API Versioning & Deprecation Policy
 
-> **Status:** 🟥 Draft
+> **Status:** 🟩 Current
 
 ## Versioning Scheme
 - URI versioning: `/v1`, `/v2`, …
