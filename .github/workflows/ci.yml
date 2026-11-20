@@ -76,8 +76,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          if [ -f requirements.txt ]; then pip install -r requirements.txt; fi
-          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt; else pip install pytest; fi
+          if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt -c requirements.lock; else pip install pytest; fi
       - name: Run pytest
         # Integration tests run here because this job provisions MySQL/Redis services.
         # The 80% coverage floor is enforced via `[tool.coverage.report] fail_under = 80`
@@ -112,7 +111,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements-dev.txt
+          pip install -r requirements-dev.txt -c requirements.lock
       - name: Start MySQL and Redis
         run: docker compose up -d --wait mysql redis
       - name: Apply migrations
