@@ -19,7 +19,7 @@ Documentation for the **Scalable Content Platform Backend**.
 - [Capacity & Scaling Model](architecture/capacity-scaling-model.md) — 🟩
 
 ## API
-- [OpenAPI Spec](api/openapi.md) — 🟨
+- [OpenAPI Spec](api/openapi.md) — 🟩
 - [API Reference / Usage Guide](api/api-reference.md) — 🟩
 - [Error Catalog](api/error-catalog.md) — 🟩
 - [Versioning & Deprecation Policy](api/versioning-policy.md) — 🟩

@@ -58,14 +58,17 @@ Use [Conventional Commits](https://www.conventionalcommits.org/): `type(scope): 
 ## Quality Gates
 These match what CI (`.github/workflows/ci.yml`) enforces:
 - Lint & format: `ruff check .` and `ruff format --check .`
+- OpenAPI snapshot: `python scripts/export_openapi.py --check`. It fails when
+  `docs/api/openapi.json` differs from the app schema. To fix it, run
+  `python scripts/export_openapi.py`, review the diff, and commit the file with your change.
 - Tests: `pytest -q` — smoke tests pass with no dependencies; integration tests (`-m integration`)
   **skip** unless MySQL/Redis are reachable (`docker compose up -d`), and run in CI (which
   provisions both service containers).
 - Run a single test: `pytest tests/smoke/test_health_live.py::test_live`
 - Scale-out tests: `pytest -m scale`, after
   `docker compose --profile scale up -d --build --scale app=3`. They **skip** unless the load
-  balancer answers on `localhost:8080`, and they do not run in CI, which does not build the
-  application image.
+  balancer answers on `localhost:8080`. In CI, the `scale` job builds the image, starts three
+  replicas, and fails on any skip.
 - Coverage: `pytest --cov=app`. The 80% floor is enforced via `[tool.coverage.report] fail_under = 80`
   in `pyproject.toml`, so any `pytest --cov=app` run (CI included) gates automatically — see the
   [testing strategy](docs/development/testing-strategy.md) §5.

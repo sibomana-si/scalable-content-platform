@@ -57,7 +57,7 @@ deserve — the layering exists precisely so each layer is independently testabl
 
 | Layer (L3) | Test type | Speed / isolation | What it asserts |
 |---|---|---|---|
-| Routers + error envelope | **Contract** | Fast — app in-process, dependencies faked or containerized | Status codes, canonical [error envelope](../api/error-catalog.md), response schema vs. OpenAPI |
+| Routers + error envelope | **Contract** | Fast — app in-process, dependencies faked or containerized | Status codes, canonical [error envelope](../api/error-catalog.md), response schema vs. OpenAPI. The committed [snapshot](../api/openapi.md) must match the app schema (`tests/smoke/test_openapi_snapshot.py`, and the `lint` job in CI) |
 | Services (auth, article, admin) | **Unit** | Fastest — pure logic, no I/O | Ownership rules, password policy, token claims, invalidation decisions |
 | Repositories | **Integration** | Real **MySQL** service container | SQL correctness, soft-delete filtering, keyset pagination edges (ties on `created_at`), transactions |
 | Cache client | **Integration** | Real **Redis** service container | Cache-aside hit/miss/populate, TTL+jitter bounds, invalidation on write, fallthrough when Redis is down |

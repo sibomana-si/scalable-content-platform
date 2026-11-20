@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **The OpenAPI schema is committed, and CI fails when it drifts.** `docs/api/openapi.json` is
+  the schema that the app serves, written by `python scripts/export_openapi.py`. The new
+  "OpenAPI snapshot" step in the `lint` job runs the script with `--check`, prints a diff, and
+  fails on any difference. `tests/smoke/test_openapi_snapshot.py` runs the same comparison in
+  `pytest -q`. Before this change, a contract change showed up in no diff.
 - **CI builds the application image and runs the `scale` suite.** A new `scale` job in
   `.github/workflows/ci.yml` builds the image with
   `docker compose --profile scale up -d --build --wait --scale app=3`, applies the migrations,
