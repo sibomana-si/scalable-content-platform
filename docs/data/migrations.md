@@ -1,6 +1,6 @@
 # Schema & Migrations Guide
 
-> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-07-12
+> **Status:** ✅ Approved · **Owner:** Simon Sibomana · **Last updated:** 2026-11-21
 
 How schema change works in this project: tooling, authoring rules, the MySQL-specific constraints
 that shape them, zero-downtime patterns, CI gates, deployment, and rollback. The schema itself is
@@ -266,16 +266,18 @@ CI run as a by-product.
 
 Migrations `0001`–`0004` have landed. Today CI covers them **indirectly**: the integration suite
 migrates a clean database to head (`alembic upgrade head` in `tests/conftest.py`) and asserts the
-schema, and `tests/integration/test_migrations.py` exercises the downgrade→upgrade round-trip. The
-dedicated `alembic`-command gates below are **not yet added to `.github/workflows/ci.yml`** — they
-remain the recommended hardening (`alembic check` in particular catches model↔migration drift the
-suite does not). All are designed to run against the **real MySQL 8 service container** already
-configured in CI, per the no-mocks rule for the data layer
-([ADR-0006](../architecture/adr/0006-test-driven-development.md)):
+schema, and `tests/integration/test_migrations.py` exercises the downgrade→upgrade round-trip.
+
+The `test` job in `.github/workflows/ci.yml` also runs each gate below as a named step, before
+`pytest`. A red step names the gate that failed. `alembic check` is the gate the suite cannot
+replace, because it catches a model change that has no revision. The steps run against the
+**real MySQL 8 service container** of the `test` job, per the no-mocks rule for the data layer
+([ADR-0006](../architecture/adr/0006-test-driven-development.md)). The round-trip runs last and
+leaves the database at head for `pytest`:
 
 | Gate | Command | Catches |
 |---|---|---|
-| Single head | `test "$(alembic heads -q \| wc -l)" -eq 1` | Unmerged parallel migration branches |
+| Single head | `test "$(alembic heads \| wc -l)" -eq 1` | Unmerged parallel migration branches |
 | Clean upgrade | `alembic upgrade head` on an empty database | Broken chain, MySQL-incompatible DDL |
 | Round-trip | `alembic downgrade base && alembic upgrade head` | Untested/fake `downgrade()` |
 | Model–migration drift | `alembic check` (after upgrade) | Model edited without a migration |
@@ -308,7 +310,7 @@ alembic upgrade +1 / downgrade -1          # step one revision either way (dev o
 alembic downgrade base                     # tear down (dev/CI only)
 alembic current                            # revision the DB is at
 alembic history --verbose                  # chain with messages
-alembic heads -q                           # open heads (CI asserts exactly 1)
+alembic heads                              # open heads (CI asserts exactly 1)
 alembic check                              # fail if models have drifted from migrations
 alembic upgrade head --sql                 # render SQL without executing (review artifact)
 alembic merge -m "merge heads" <rev1> <rev2>  # last resort; prefer rebasing the branch
