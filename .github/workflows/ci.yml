@@ -81,6 +81,24 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           if [ -f requirements-dev.txt ]; then pip install -r requirements-dev.txt -c requirements.lock; else pip install pytest; fi
+      # The migration gates from docs/data/migrations.md §9. The database is the empty service
+      # container, and the round-trip leaves it at head for pytest.
+      - name: Migrations (single head)
+        # Two heads mean two branches added revisions on the same parent. Rebase one of them.
+        run: |
+          alembic heads
+          test "$(alembic heads | wc -l)" -eq 1
+      - name: Migrations (offline SQL)
+        # Fails when a revision cannot render without a connection.
+        run: alembic upgrade head --sql > /dev/null
+      - name: Migrations (clean upgrade)
+        run: alembic upgrade head
+      - name: Migrations (model drift)
+        # Fails when a model changes and no revision matches it.
+        run: alembic check
+      - name: Migrations (round-trip)
+        # Fails when a downgrade() does not undo its upgrade().
+        run: alembic downgrade base && alembic upgrade head
       - name: Run pytest
         # Integration tests run here because this job provisions MySQL/Redis services.
         # The 80% coverage floor is enforced via `[tool.coverage.report] fail_under = 80`

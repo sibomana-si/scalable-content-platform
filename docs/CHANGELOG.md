@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- **CI runs the Alembic migration gates.** The `test` job runs five named steps before
+  `pytest`: single head, offline SQL, clean upgrade, model drift (`alembic check`), and the
+  downgrade round-trip. Before this change, a model change with no revision, a second head, or
+  a revision that could not render offline passed CI. The single-head command in
+  [the migrations guide](data/migrations.md) is fixed: `alembic heads -q` exits 2, so the gate
+  uses `alembic heads`.
 - **The OpenAPI schema is committed, and CI fails when it drifts.** `docs/api/openapi.json` is
   the schema that the app serves, written by `python scripts/export_openapi.py`. The new
   "OpenAPI snapshot" step in the `lint` job runs the script with `--check`, prints a diff, and

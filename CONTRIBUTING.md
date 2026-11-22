@@ -61,6 +61,10 @@ These match what CI (`.github/workflows/ci.yml`) enforces:
 - OpenAPI snapshot: `python scripts/export_openapi.py --check`. It fails when
   `docs/api/openapi.json` differs from the app schema. To fix it, run
   `python scripts/export_openapi.py`, review the diff, and commit the file with your change.
+- Migrations: the `test` job runs five Alembic gates before `pytest`. They check for a single
+  head, render the offline SQL, upgrade an empty database, run `alembic check`, and run a
+  downgrade round-trip. See [migrations §9](docs/data/migrations.md#9-ci-gates). After a model
+  change, run `alembic check` locally. It fails when the change has no revision.
 - Tests: `pytest -q` — smoke tests pass with no dependencies; integration tests (`-m integration`)
   **skip** unless MySQL/Redis are reachable (`docker compose up -d`), and run in CI (which
   provisions both service containers).
